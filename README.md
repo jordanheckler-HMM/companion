@@ -1,13 +1,13 @@
 # Companion - Intelligent Desktop Assistant
 
-Companion is a modern, **local-first** AI desktop assistant built with **Tauri v2**, **React**, and **TypeScript**. It seamlessly blends local privacy (via Ollama) with cloud-grade capability (OpenAI, Anthropic, Google), customizable through a beautiful glassmorphism interface.
+Companion is a modern, **local-first** AI desktop assistant built with **Tauri v2**, **React**, and **TypeScript**. It offers both local privacy (via Ollama) and cloud-grade capability (OpenAI, Anthropic, Google), customizable through a beautiful glassmorphism interface.
 
 ## 🚀 Key Features
 
-### 🧠 Hybrid Intelligence
-- **Local-First**: Runs privacy-sensitive queries locally using **Ollama** (Llama 3, Mistral, Phi-2, etc.).
-- **Cloud Scale**: Automatically routes complex reasoning or large-context tasks to **GPT-4o**, **Claude 3.5 Sonnet**, or **Gemini 1.5 Pro**.
-- **Smart Routing**: The `QueryRouter` analyzes your prompt (complexity, keywords, attachments) to pick the best model for the job.
+### 🧠 Dual Intelligence Modes
+- **Local Mode**: Runs entirely on your machine using **Ollama** (Llama 3, Mistral, etc.) for maximum privacy and offline capability.
+- **Cloud Mode**: Connects to top-tier models like **GPT-4o**, **Claude 3.5 Sonnet**, or **Gemini 1.5 Pro** for complex reasoning and highest quality responses.
+- **Flexible Choice**: Easily toggle between modes based on your immediate needs for privacy vs. power.
 
 ### ⚡ Mini Chat (Quick Access)
 - A global, always-on-top floating panel for quick questions.
@@ -17,7 +17,7 @@ Companion is a modern, **local-first** AI desktop assistant built with **Tauri v
 - **Chat with Files**: Upload PDFs, Docs, and Text files. Companion indexes them into a local vector database.
 - **Semantic Search**: Ask questions about your documents, and Companion retrieves the exact context before answering.
 
-### �️ Agentic Tools
+### 🛠️ Agentic Tools
 Companion isn't just a chatbot; it can **do** things:
 - **Web Search**: Real-time information via DuckDuckGo.
 - **File System**: Read/Write files directly on your computer.
