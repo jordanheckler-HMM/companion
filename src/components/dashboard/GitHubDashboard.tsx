@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from '@/store'
 import { ToolService } from '@/services/toolService'
 import { RAGService } from '@/services/ragService'
+import { open as openUrl } from '@tauri-apps/plugin-shell'
 import { Loader2, GitFork, Star, Circle, ExternalLink, Check, FileText } from 'lucide-react'
 
 interface Repo {
@@ -16,7 +17,7 @@ interface Repo {
 }
 
 export function GitHubDashboard() {
-    const { settings, addMessage, setCurrentView, addKnowledgeChunks, updateMessage } = useStore()
+    const { settings, addMessage, setCurrentView, addKnowledgeChunks, updateMessage, addPendingContext } = useStore()
     const [repos, setRepos] = useState<Repo[]>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -54,14 +55,6 @@ export function GitHubDashboard() {
 
         fetchRepos()
     }, [settings.aiSettings.githubApiKey])
-
-    const handleAskAI = (repo: Repo) => {
-        addMessage({
-            role: 'user',
-            content: `Tell me about the repository ${repo.full_name}`
-        })
-        setCurrentView('home')
-    }
 
     const handleIndexReadme = async (e: React.MouseEvent, repo: Repo) => {
         e.preventDefault()
@@ -132,7 +125,12 @@ export function GitHubDashboard() {
                 </div>
                 <button
                     onClick={() => {
-                        addMessage({ role: 'user', content: "Summarize my recent GitHub activity across all my repos" })
+                        addPendingContext({
+                            type: 'ai_prompt',
+                            title: '🔍 Analyze GitHub Activity',
+                            prompt: 'Summarize my recent GitHub activity across all my repos',
+                            metadata: { source: 'github' }
+                        })
                         setCurrentView('home')
                     }}
                     className="text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full transition-colors"
@@ -182,14 +180,17 @@ export function GitHubDashboard() {
                                                     <FileText className="h-3 w-3" />
                                                 )}
                                             </button>
-                                            <a
-                                                href={repo.html_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
+                                            <button
+                                                onClick={(e) => {
+                                                    e.preventDefault()
+                                                    e.stopPropagation()
+                                                    openUrl(repo.html_url)
+                                                }}
                                                 className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity p-1.5"
+                                                title="Open in GitHub"
                                             >
                                                 <ExternalLink className="h-3 w-3" />
-                                            </a>
+                                            </button>
                                         </div>
                                     </div>
 
@@ -214,15 +215,6 @@ export function GitHubDashboard() {
                                                 {repo.forks_count}
                                             </span>
                                         </div>
-                                    </div>
-
-                                    <div className="absolute top-12 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button
-                                            onClick={() => handleAskAI(repo)}
-                                            className="bg-primary/20 hover:bg-primary/30 text-primary-foreground text-xs px-2 py-1 rounded"
-                                        >
-                                            Chat
-                                        </button>
                                     </div>
                                 </div>
                             )

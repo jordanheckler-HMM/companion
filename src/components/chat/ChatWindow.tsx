@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { readTextFile, readFile } from '@tauri-apps/plugin-fs'
-import { Send, Paperclip, ChevronDown, Sparkles, Square, X, FileEdit, Cloud, Home } from 'lucide-react'
+import { Send, Paperclip, ChevronDown, Sparkles, Square, X, FileEdit, Cloud, Home, Database, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -124,6 +124,10 @@ export function ChatWindow() {
     updateMessage,
     clearMessages,
     knowledgeBase,
+    clearKnowledgeBase,
+    pendingContext,
+    removePendingContext,
+    clearPendingContext,
     availableModels,
     setAvailableModels
   } = useStore()
@@ -183,17 +187,29 @@ export function ChatWindow() {
 
   const handleSend = async () => {
     const userInput = input.trim()
-    if (!userInput && pendingFiles.length === 0) return
+
+    // Collect prompts from pending context (ai_prompt type)
+    const pendingPrompts = pendingContext.filter(ctx => ctx.type === 'ai_prompt' && ctx.prompt)
+
+    if (!userInput && pendingFiles.length === 0 && pendingPrompts.length === 0) return
     if (isLoading) return
 
     setInput('')
     setIsLoading(true)
     userHasScrolledUpRef.current = false
 
+    // Build the full message content
+    // If there are pending prompts, prepend them to the user input
+    let fullUserMessage = userInput
+    if (pendingPrompts.length > 0) {
+      const promptTexts = pendingPrompts.map(p => p.prompt).join('\n')
+      fullUserMessage = userInput ? `${promptTexts}\n\n${userInput}` : promptTexts
+    }
+
     // Add user message if there's text
-    if (userInput) {
+    if (fullUserMessage) {
       addMessage({
-        content: userInput,
+        content: fullUserMessage,
         role: 'user'
       })
     }
@@ -206,6 +222,11 @@ export function ChatWindow() {
           content: `Attached file: **${file.name}** (Session Only)`
         })
       }
+    }
+
+    // Clear pending context after collecting prompts
+    if (pendingPrompts.length > 0) {
+      clearPendingContext()
     }
 
     // Create a placeholder for assistant message
@@ -231,7 +252,7 @@ export function ChatWindow() {
         settings.aiSettings.intelligenceMode,
         settings.aiSettings.preferredModelId,
         {
-          input: userInput,
+          input: fullUserMessage,
           attachmentCount: pendingFiles.length,
           toolsEnabled: true // Simplified for routing
         }
@@ -241,7 +262,7 @@ export function ChatWindow() {
       const modelLabel = modelDef ? modelDef.displayName : selectedModelId
 
       // Search Knowledge Base for context
-      const relevantChunks = await ragService.search(userInput || '', knowledgeBase, 3)
+      const relevantChunks = await ragService.search(fullUserMessage || '', knowledgeBase, 3)
       let contextText = relevantChunks.length > 0
         ? `\n\nRelevant information from user's KNOWLEDGE BASE files:\n${relevantChunks.map((c: any) => `--- KNOWLEDGE CONTEXT ---\n${c.content}\n------------------`).join('\n\n')}`
         : ''
@@ -255,7 +276,7 @@ export function ChatWindow() {
       const conversationHistory = [
         { role: 'system' as const, content: settings.systemPrompt + contextText },
         ...messages.concat(
-          userInput ? [{ id: 'temp-user', content: userInput, role: 'user', timestamp: new Date() }] : []
+          fullUserMessage ? [{ id: 'temp-user', content: fullUserMessage, role: 'user', timestamp: new Date() }] : []
         ).map(m => ({
           role: m.role,
           content: m.content,
@@ -652,6 +673,39 @@ export function ChatWindow() {
 
       {/* Input Bar */}
       <div className="glass-input border-t border-white/20 px-6 py-4">
+        {/* Knowledge Base Indicator */}
+        {knowledgeBase.length > 0 && (
+          <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+            <Database className="h-4 w-4 text-emerald-400" />
+            <span className="text-sm text-emerald-300 flex-1 truncate">
+              {(() => {
+                // Extract unique sources from fileId
+                const sources = [...new Set(knowledgeBase.map(kb => {
+                  const fileId = kb.fileId
+                  if (fileId.startsWith('github-')) {
+                    // Format: github-owner/repo-readme -> owner/repo
+                    const match = fileId.match(/^github-(.+)-readme$/)
+                    return `📦 ${match ? match[1] : fileId.replace('github-', '')}`
+                  }
+                  if (fileId.startsWith('notion-')) {
+                    // Format: notion-PageTitle -> PageTitle
+                    return `📝 ${fileId.replace('notion-', '')}`
+                  }
+                  return fileId
+                }))]
+                return `${sources.length} source${sources.length > 1 ? 's' : ''} indexed: ${sources.slice(0, 3).join(', ')}${sources.length > 3 ? '...' : ''}`
+              })()}
+            </span>
+            <button
+              onClick={clearKnowledgeBase}
+              className="ml-auto p-1 hover:bg-white/10 rounded transition-colors text-emerald-400/70 hover:text-red-400"
+              title="Clear Knowledge Base"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Pending Files Preview */}
         {pendingFiles.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
@@ -666,6 +720,27 @@ export function ChatWindow() {
                   onClick={() => removePendingFile(index)}
                   className="ml-1 hover:bg-white/10 rounded p-0.5 transition-colors"
                   aria-label="Remove file"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Pending Context Preview (AI Prompts from Integrations) */}
+        {pendingContext.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {pendingContext.map((ctx) => (
+              <div
+                key={ctx.id}
+                className="glass px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm border border-blue-500/30 bg-blue-500/10"
+              >
+                <span className="text-blue-400">{ctx.title}</span>
+                <button
+                  onClick={() => removePendingContext(ctx.id)}
+                  className="ml-1 hover:bg-white/10 rounded p-0.5 transition-colors text-blue-400/70 hover:text-red-400"
+                  aria-label="Remove context"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>

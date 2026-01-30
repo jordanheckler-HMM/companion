@@ -30,6 +30,16 @@ export interface KnowledgeChunk {
   embedding?: number[]
 }
 
+// Pending context from integrations (staged before sending)
+export interface PendingContext {
+  id: string
+  type: 'github_repo' | 'notion_page' | 'calendar_event' | 'ai_prompt'
+  title: string
+  description?: string
+  prompt?: string  // For ai_prompt type, the actual query to send
+  metadata?: Record<string, any>
+}
+
 // AI Settings types
 export interface AISettings {
   providerType?: 'local' | 'cloud' // Deprecated, kept for migration
@@ -106,6 +116,12 @@ interface AppState {
   knowledgeBase: KnowledgeChunk[]
   addKnowledgeChunks: (chunks: KnowledgeChunk[]) => void
   clearKnowledgeBase: () => void
+
+  // Pending Context (staged integration items for next message)
+  pendingContext: PendingContext[]
+  addPendingContext: (context: Omit<PendingContext, 'id'>) => void
+  removePendingContext: (id: string) => void
+  clearPendingContext: () => void
 
   // Model Management
   availableModels: any[] // Should be ModelDefinition[] but avoiding circular dependency for now
@@ -335,6 +351,18 @@ export const useStore = create<AppState>()(
           knowledgeBase: [...state.knowledgeBase, ...chunks],
         })),
       clearKnowledgeBase: () => set({ knowledgeBase: [] }),
+
+      // Pending Context (staged integration items)
+      pendingContext: [],
+      addPendingContext: (context) =>
+        set((state) => ({
+          pendingContext: [...state.pendingContext, { ...context, id: crypto.randomUUID() }],
+        })),
+      removePendingContext: (id) =>
+        set((state) => ({
+          pendingContext: state.pendingContext.filter((c) => c.id !== id),
+        })),
+      clearPendingContext: () => set({ pendingContext: [] }),
 
       // Model Management
       availableModels: [],

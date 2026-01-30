@@ -1,10 +1,12 @@
 import { useStore } from '../../store'
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 
 /**
  * Notion Tool
  * Allows AI to interact with Notion API
  * 
  * Prerequisites: User must have NOTION_API_KEY in settings
+ * Note: Uses Tauri HTTP plugin for external API requests (CORS bypass)
  */
 
 // NotionPage interface removed - not currently used
@@ -43,7 +45,7 @@ export class NotionTool {
     private static async search(apiKey: string, args: any): Promise<string> {
         const query = args.query || args.q
 
-        const response = await fetch('https://api.notion.com/v1/search', {
+        const response = await tauriFetch('https://api.notion.com/v1/search', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
@@ -64,7 +66,7 @@ export class NotionTool {
         const data = await response.json()
 
         if (!data.results || data.results.length === 0) {
-            return JSON.stringify([])
+            return JSON.stringify({ results: [] })
         }
 
         const cleanPages = data.results.map((page: any) => ({
@@ -72,11 +74,13 @@ export class NotionTool {
             object: page.object,
             url: page.url,
             last_edited_time: page.last_edited_time,
-            title: this.extractTitle(page),
+            properties: page.properties,
+            title: page.title,
             icon: page.icon
         }))
 
-        return JSON.stringify(cleanPages)
+        // Return in the same structure as the Notion API so the dashboard can parse it
+        return JSON.stringify({ results: cleanPages })
     }
 
     /**
@@ -88,7 +92,7 @@ export class NotionTool {
         // Note: Skipping page metadata fetch - only need blocks content for RAG indexing
 
         // Get page content (blocks)
-        const blocksResponse = await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
+        const blocksResponse = await tauriFetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Notion-Version': '2022-06-28'
@@ -145,7 +149,7 @@ export class NotionTool {
             ] : []
         }
 
-        const response = await fetch('https://api.notion.com/v1/pages', {
+        const response = await tauriFetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
@@ -164,22 +168,6 @@ export class NotionTool {
         return `Page created successfully: "${title}"\nURL: ${data.url}`
     }
 
-    /**
-     * Extract title from page object
-     */
-    private static extractTitle(page: any): string {
-        try {
-            const titleProp = page.properties?.title || page.properties?.Name
-            if (!titleProp) return 'Untitled'
-
-            if (titleProp.title && titleProp.title.length > 0) {
-                return titleProp.title[0].plain_text || 'Untitled'
-            }
-            return 'Untitled'
-        } catch {
-            return 'Untitled'
-        }
-    }
 
     /**
      * Extract text from a block

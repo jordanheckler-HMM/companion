@@ -1,3 +1,4 @@
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import { useStore } from '../../store'
 
 /**
@@ -56,7 +57,7 @@ export class GitHubTool {
             ? `https://api.github.com/users/${username}/repos`
             : 'https://api.github.com/user/repos'
 
-        const response = await fetch(`${url}?per_page=${limit}&sort=updated`, {
+        const response = await tauriFetch(`${url}?per_page=${limit}&sort=updated`, {
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Accept': 'application/vnd.github.v3+json'
@@ -100,7 +101,7 @@ export class GitHubTool {
         const state = args.state || 'open'
         const limit = args.limit || 10
 
-        const response = await fetch(
+        const response = await tauriFetch(
             `https://api.github.com/repos/${repo}/issues?state=${state}&per_page=${limit}`,
             {
                 headers: {
@@ -147,7 +148,7 @@ export class GitHubTool {
         const state = args.state || 'open'
         const limit = args.limit || 10
 
-        const response = await fetch(
+        const response = await tauriFetch(
             `https://api.github.com/repos/${repo}/pulls?state=${state}&per_page=${limit}`,
             {
                 headers: {
@@ -198,7 +199,7 @@ export class GitHubTool {
             return 'Error: title is required to create an issue'
         }
 
-        const response = await fetch(
+        const response = await tauriFetch(
             `https://api.github.com/repos/${repo}/issues`,
             {
                 method: 'POST',
@@ -231,7 +232,7 @@ export class GitHubTool {
             return 'Error: repo parameter required (format: "owner/repo")'
         }
 
-        const response = await fetch(
+        const response = await tauriFetch(
             `https://api.github.com/repos/${repo}/contents/${path}`,
             {
                 headers: {

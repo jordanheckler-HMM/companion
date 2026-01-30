@@ -364,9 +364,8 @@ The editor will open with this content pre-loaded. The user can then edit, save,
     }
 
     private getToolSystemPrompt(): string {
-        if (this.settings.providerType === 'cloud' && (this.settings.cloudProvider === 'openai' || this.settings.cloudProvider === 'google')) {
-            return ''
-        }
+        // Note: We always include tool instructions so the AI knows about available integrations
+        // The text-based tool calling format works with all providers
 
         const allTools = ToolService.getToolDefinitions()
         const toolSettings = this.settings.toolsEnabled || {
@@ -389,9 +388,19 @@ The editor will open with this content pre-loaded. The user can then edit, save,
             `- ${t.name}: ${t.description}`
         ).join('\n')
 
+        // Build list of connected integrations
+        const connectedIntegrations: string[] = []
+        if (this.settings.notionApiKey) connectedIntegrations.push('Notion (can search/read/create pages)')
+        if (this.settings.githubApiKey) connectedIntegrations.push('GitHub (can access repos, issues, pull requests)')
+        if (this.settings.googleApiKey) connectedIntegrations.push('Google Calendar (can list/create/search events)')
+
+        const connectedSection = connectedIntegrations.length > 0
+            ? `\n## CONNECTED INTEGRATIONS (Ready to use - keys are configured):\n${connectedIntegrations.map(i => `✅ ${i}`).join('\n')}\n`
+            : ''
+
         return `
 YOU ARE A TOOL-USING ASSISTANT. When you need external information, you MUST output a tool call.
-
+${connectedSection}
 ## HOW TO CALL A TOOL:
 Output this exact format (the system will execute it and return results):
 [TOOL:tool_name]{"param": "value"}[/TOOL]

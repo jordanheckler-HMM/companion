@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useStore } from '@/store'
 import { ToolService } from '@/services/toolService'
 import { RAGService } from '@/services/ragService'
-import { Loader2, FileText, Database, ArrowRight, Download, Check } from 'lucide-react'
+import { open as openUrl } from '@tauri-apps/plugin-shell'
+import { Loader2, FileText, Database, ArrowRight, Download, Check, ExternalLink } from 'lucide-react'
 
 // Simplified Notion Object interface
 interface NotionObject {
@@ -33,7 +34,7 @@ const getTitle = (obj: NotionObject): string => {
 }
 
 export function NotionDashboard() {
-    const { settings, addMessage, setCurrentView, addKnowledgeChunks, updateMessage } = useStore()
+    const { settings, addMessage, setCurrentView, addKnowledgeChunks, updateMessage, addPendingContext } = useStore()
     const [items, setItems] = useState<NotionObject[]>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -52,12 +53,19 @@ export function NotionDashboard() {
                     query: ''
                 })
 
+                // Check if the response is an error message (not JSON)
+                const resultStr = response.result || ''
+                if (resultStr.startsWith('Notion error:') || resultStr.startsWith('Notion is not configured')) {
+                    setError(resultStr)
+                    return
+                }
+
                 let data: any = {}
                 try {
-                    data = JSON.parse(response.result)
+                    data = JSON.parse(resultStr)
                 } catch {
-                    console.warn("Could not parse Notion data", response.result)
-                    setError("Received unstructured data.")
+                    console.warn("Could not parse Notion data", resultStr)
+                    setError(resultStr || "Received unstructured data.")
                     return
                 }
 
@@ -99,7 +107,8 @@ export function NotionDashboard() {
 
             // 3. Process into Knowledge Base (RAG)
             const ragService = new RAGService(settings.aiSettings)
-            const chunks = ragService.chunkText(content, `notion-${item.id}`)
+            const pageTitle = getTitle(item).replace(/[^a-zA-Z0-9\s-]/g, '').trim() || 'Untitled'
+            const chunks = ragService.chunkText(content, `notion-${pageTitle}`)
 
             const enrichedChunks = await ragService.generateEmbeddings(chunks)
             addKnowledgeChunks(enrichedChunks)
@@ -145,7 +154,12 @@ export function NotionDashboard() {
                 </div>
                 <button
                     onClick={() => {
-                        addMessage({ role: 'user', content: "Search my Notion for [topic]" })
+                        addPendingContext({
+                            type: 'ai_prompt',
+                            title: '🔍 Search Notion',
+                            prompt: 'Search my Notion for [topic]',
+                            metadata: { source: 'notion' }
+                        })
                         setCurrentView('home')
                     }}
                     className="text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full transition-colors"
@@ -173,22 +187,20 @@ export function NotionDashboard() {
                             const isIndexing = indexingId === item.id
 
                             return (
-                                <a
+                                <div
                                     key={item.id}
-                                    href={item.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="glass-card p-4 rounded-xl hover:bg-white/5 transition-all group flex flex-col h-full relative"
+                                    className="glass-card p-4 rounded-xl hover:bg-white/5 transition-all group flex flex-col h-full relative cursor-pointer"
+                                    onClick={() => openUrl(item.url)}
                                 >
-                                    <div className="absolute top-4 right-4 z-20">
+                                    <div className="absolute top-4 right-4 z-20 flex gap-1">
                                         <button
                                             onClick={(e) => handleIndexPage(e, item)}
                                             disabled={isIndexing || isIndexed}
                                             className={`p-1.5 rounded-md transition-colors ${isIndexed
-                                                    ? 'bg-green-500/20 text-green-400'
-                                                    : isIndexing
-                                                        ? 'bg-blue-500/20 text-blue-400'
-                                                        : 'bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground'
+                                                ? 'bg-green-500/20 text-green-400'
+                                                : isIndexing
+                                                    ? 'bg-blue-500/20 text-blue-400'
+                                                    : 'bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground'
                                                 }`}
                                             title="Index into Knowledge Base"
                                         >
@@ -200,9 +212,19 @@ export function NotionDashboard() {
                                                 <Download className="h-4 w-4" />
                                             )}
                                         </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                openUrl(item.url)
+                                            }}
+                                            className="p-1.5 rounded-md bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100"
+                                            title="Open in Notion"
+                                        >
+                                            <ExternalLink className="h-4 w-4" />
+                                        </button>
                                     </div>
 
-                                    <div className="flex items-start gap-3 mb-2 pr-8">
+                                    <div className="flex items-start gap-3 mb-2 pr-16">
                                         <div className="mt-0.5 text-xl">
                                             {item.icon?.emoji ? item.icon.emoji : (
                                                 item.object === 'database' ? <Database className="h-5 w-5 text-blue-400" /> : <FileText className="h-5 w-5 text-gray-400" />
@@ -219,7 +241,7 @@ export function NotionDashboard() {
                                         </span>
                                         <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </div>
-                                </a>
+                                </div>
                             )
                         })}
                     </div>
