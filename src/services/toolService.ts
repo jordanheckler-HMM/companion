@@ -5,6 +5,7 @@ import { CodeExecutionTool } from './tools/codeExecutionTool'
 import { GoogleCalendarTool } from './tools/googleCalendarTool'
 import { NotionTool } from './tools/notionTool'
 import { GitHubTool } from './tools/githubTool'
+import { ErrorLogger, ErrorSeverity } from '../utils/errorLogger'
 
 export interface ToolDefinition {
     name: string
@@ -264,10 +265,21 @@ export class ToolService {
                     return { tool: name, result: `Unknown tool: ${name}`, isError: true }
             }
             return { tool: name, result }
+
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+
+            ErrorLogger.log(
+                `Tool execution failed: ${name}`,
+                ErrorSeverity.ERROR,
+                'ToolService',
+                { tool: name, args },
+                error
+            )
+
             return {
                 tool: name,
-                result: error instanceof Error ? error.message : String(error),
+                result: `Error executing ${name}: ${errorMessage}`,
                 isError: true
             }
         }

@@ -70,8 +70,13 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
         "p-4 border-b border-white/10 flex items-center gap-3",
         collapsed && "flex-col px-2 py-6 gap-4"
       )}>
-        <div className="h-8 w-8 rounded-lg overflow-hidden flex-shrink-0 border border-white/20 shadow-lg">
-          <img src={logo} alt="Logo" className="h-full w-full object-cover" />
+        <div className="h-8 w-8 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center relative bg-black shadow-lg border border-white/20">
+          <img
+            src={logo}
+            alt="Logo"
+            className="w-full h-full object-cover scale-110 mix-blend-screen"
+          />
+          <div className="absolute inset-0 bg-accent mix-blend-color opacity-70 pointer-events-none" />
         </div>
         {!collapsed && (
           <h1 className="font-bold text-lg transition-opacity duration-300 truncate">

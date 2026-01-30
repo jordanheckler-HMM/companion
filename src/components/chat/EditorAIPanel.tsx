@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store'
+import logo from '@/assets/logo.png'
 
 interface AIMessage {
     id: string
@@ -193,8 +194,9 @@ export function EditorAIPanel({
                         >
                             {!isUser && (
                                 <div className="flex items-center gap-2 mb-1 px-1">
-                                    <div className="h-5 w-5 rounded-md overflow-hidden border border-white/20">
-                                        <img src="/src/assets/logo.png" alt="Logo" className="h-full w-full object-cover" />
+                                    <div className="h-5 w-5 rounded-md overflow-hidden border border-white/20 relative bg-black">
+                                        <img src={logo} alt="Logo" className="h-full w-full object-cover scale-110 mix-blend-screen" />
+                                        <div className="absolute inset-0 bg-accent mix-blend-color opacity-70 pointer-events-none" />
                                     </div>
                                     <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">{settings.assistantName}</span>
                                 </div>
@@ -240,8 +242,9 @@ export function EditorAIPanel({
                 {loading && (
                     <div className="flex flex-col gap-2 items-start">
                         <div className="flex items-center gap-2 mb-1 px-1">
-                            <div className="h-5 w-5 rounded-md overflow-hidden border border-white/20">
-                                <img src="/src/assets/logo.png" alt="Logo" className="h-full w-full object-cover" />
+                            <div className="h-5 w-5 rounded-md overflow-hidden border border-white/20 relative bg-black">
+                                <img src={logo} alt="Logo" className="h-full w-full object-cover scale-110 mix-blend-screen" />
+                                <div className="absolute inset-0 bg-accent mix-blend-color opacity-70 pointer-events-none" />
                             </div>
                             <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">{settings.assistantName} is thinking...</span>
                         </div>

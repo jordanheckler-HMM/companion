@@ -45,8 +45,13 @@ function MessageBubble({ message }: MessageBubbleProps) {
         isUser ? 'flex-row-reverse' : 'flex-row'
       )}
     >
-      <Avatar className="h-8 w-8 flex-shrink-0 border border-white/10 overflow-hidden">
-        {!isUser && <img src={logo} alt="Assistant" className="h-full w-full object-cover" />}
+      <Avatar className="h-8 w-8 flex-shrink-0 border border-white/10 overflow-hidden relative bg-black">
+        {!isUser && (
+          <>
+            <img src={logo} alt="Assistant" className="h-full w-full object-cover scale-110 mix-blend-screen" />
+            <div className="absolute inset-0 bg-accent mix-blend-color opacity-70 pointer-events-none" />
+          </>
+        )}
         <AvatarFallback
           className={cn(isUser ? 'bg-background/20' : '')}
           style={!isUser && !message.content ? {

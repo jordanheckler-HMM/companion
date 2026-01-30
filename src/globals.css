@@ -123,6 +123,11 @@
     background-color: rgb(var(--accent-rgb));
   }
 
+  /* Dynamic Accent Color Override - for mix-blend-color etc */
+  .bg-accent {
+    background-color: rgb(var(--accent-rgb)) !important;
+  }
+
   /* Glassmorphism utilities */
   .glass {
     @apply backdrop-blur-md border border-foreground/10;

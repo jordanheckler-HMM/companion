@@ -2,6 +2,7 @@ import { AISettings } from '../store'
 import { ToolService } from './toolService'
 import { ModelRegistry, ModelDefinition } from './ModelRegistry'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
+import { ErrorLogger, ErrorSeverity } from '../utils/errorLogger'
 
 // Note: Use native `fetch` for Ollama (localhost) requests due to Tauri HTTP plugin issues with loopback
 
@@ -63,7 +64,9 @@ The editor will open with this content pre-loaded. The user can then edit, save,
             const model = registry.getModelById(modelId)
 
             if (!model) {
-                return { message: '', error: `Model ${modelId} not found in registry.` }
+                const error = `Model ${modelId} not found in registry.`
+                ErrorLogger.log(error, ErrorSeverity.ERROR, 'AIService', { modelId })
+                return { message: '', error }
             }
 
             // Inject tool definitions and temporal context into system prompt
@@ -88,10 +91,18 @@ The editor will open with this content pre-loaded. The user can then edit, save,
 
             while (maxIterations > 0) {
                 let response: ChatResponse
-                if (model.provider === 'ollama') {
-                    response = await this.sendToOllama(currentMessages, model)
-                } else {
-                    response = await this.sendToCloudProvider(currentMessages, model)
+                try {
+                    response = await this.retryOperation(async () => {
+                        if (model.provider === 'ollama') {
+                            return await this.sendToOllama(currentMessages, model)
+                        } else {
+                            return await this.sendToCloudProvider(currentMessages, model)
+                        }
+                    }, `SendMessage (${model.provider})`)
+                } catch (err) {
+                    const errorMsg = err instanceof Error ? err.message : 'Unknown error during request'
+                    ErrorLogger.log(`Failed to send message: ${errorMsg}`, ErrorSeverity.ERROR, 'AIService', { modelId: model.id }, err)
+                    return { message: '', error: errorMsg }
                 }
 
                 if (response.error) return response
@@ -128,6 +139,48 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         } finally {
             clearTimeout(timeoutId)
         }
+    }
+
+    /**
+     * Retry an operation with exponential backoff
+     */
+    private async retryOperation<T>(
+        operation: () => Promise<T>,
+        context: string,
+        maxRetries: number = 2
+    ): Promise<T> {
+        let lastError: any = null;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                return await operation();
+            } catch (error: any) {
+                lastError = error;
+                const isRetryable = this.isRetryableError(error);
+
+                if (!isRetryable || attempt === maxRetries) {
+                    throw error;
+                }
+
+                // Exponential backoff: 1s, 2s, 4s
+                const delay = Math.pow(2, attempt) * 1000;
+                console.log(`[AIService] ${context} failed. Retrying in ${delay}ms... (Attempt ${attempt + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+        throw lastError;
+    }
+
+    private isRetryableError(error: any): boolean {
+        const msg = (error.message || '').toLowerCase();
+        // 429: Too Many Requests, 5xx: Server Errors, specific generic network errors
+        return msg.includes('429') ||
+            msg.includes('500') ||
+            msg.includes('502') ||
+            msg.includes('503') ||
+            msg.includes('network error') ||
+            msg.includes('failed to fetch') ||
+            msg.includes('connection refused');
     }
 
     /**
@@ -240,7 +293,16 @@ The editor will open with this content pre-loaded. The user can then edit, save,
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}))
-            throw new Error(`OpenAI API error: ${response.statusText}${errorData.error?.message ? ' - ' + errorData.error.message : ''}`)
+            const status = response.status
+            let reason = `Status ${status}`
+
+            if (status === 401) reason = 'Invalid API Key'
+            else if (status === 429) reason = 'Rate Limit Exceeded'
+            else if (status === 500) reason = 'OpenAI Server Error'
+            else if (status === 503) reason = 'OpenAI Service Unavailable'
+
+            const detailedMsg = errorData.error?.message || response.statusText
+            throw new Error(`OpenAI Error (${reason}): ${detailedMsg}`)
         }
 
         const data = await response.json()
@@ -295,7 +357,10 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         })
 
         if (!response.ok) {
-            throw new Error(`Ollama API error: ${response.statusText}`)
+            let reason = `Status ${response.status}`
+            if (response.status === 404) reason = 'Model not found (check if pulled)'
+
+            throw new Error(`Ollama API error (${reason}): ${response.statusText}`)
         }
 
         const data = await response.json()
@@ -341,7 +406,14 @@ The editor will open with this content pre-loaded. The user can then edit, save,
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}))
-            throw new Error(`Anthropic API error: ${response.statusText}${errorData.error?.message ? ' - ' + errorData.error.message : ''}`)
+            const status = response.status
+            let reason = `Status ${status}`
+            if (status === 401) reason = 'Invalid API Key'
+            else if (status === 429) reason = 'Rate Limit Exceeded'
+            else if (status === 529) reason = 'Overloaded'
+
+            const detailedMsg = errorData.error?.message || response.statusText
+            throw new Error(`Anthropic Error (${reason}): ${detailedMsg}`)
         }
 
         const data = await response.json()
@@ -468,74 +540,86 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         }
 
         // Inject tool definitions and temporal context into system prompt
-        const toolSystemMsg = this.getToolSystemPrompt()
-        const temporalContext = this.getTemporalContext()
-        const injectedContext = [
-            temporalContext,
-            toolSystemMsg,
-            AIService.EDITOR_INSTRUCTIONS
-        ].filter(Boolean).join('\n\n')
-        let currentMessages = [...messages]
+        try {
+            const toolSystemMsg = this.getToolSystemPrompt()
+            const temporalContext = this.getTemporalContext()
+            const injectedContext = [
+                temporalContext,
+                toolSystemMsg,
+                AIService.EDITOR_INSTRUCTIONS
+            ].filter(Boolean).join('\n\n')
+            let currentMessages = [...messages]
 
-        // Find system message or add one
-        const systemMsgIndex = currentMessages.findIndex(m => m.role === 'system')
-        if (systemMsgIndex !== -1) {
-            currentMessages[systemMsgIndex].content += "\n\n" + injectedContext
-        } else {
-            currentMessages.unshift({ role: 'system', content: injectedContext })
-        }
-
-        let maxIterations = 3 // Reduced from 5
-        let iterationCount = 0
-
-        while (iterationCount < maxIterations) {
-            let fullResponse = ''
-            const streamChunk = (chunk: string) => {
-                fullResponse += chunk
-                onChunk(chunk)
-            }
-
-            if (model.provider === 'ollama') {
-                await this.streamFromOllama(currentMessages, model, streamChunk)
-            } else if (model.provider === 'openai') {
-                await this.streamFromOpenAI(currentMessages, model, streamChunk)
-            } else if (model.provider === 'google') {
-                await this.streamFromGoogle(currentMessages, model, streamChunk)
+            // Find system message or add one
+            const systemMsgIndex = currentMessages.findIndex(m => m.role === 'system')
+            if (systemMsgIndex !== -1) {
+                currentMessages[systemMsgIndex].content += "\n\n" + injectedContext
             } else {
-                await this.streamFromAnthropic(currentMessages, model, streamChunk)
+                currentMessages.unshift({ role: 'system', content: injectedContext })
             }
 
-            const toolCalls = this.extractToolCalls(fullResponse)
+            let maxIterations = 3 // Reduced from 5
+            let iterationCount = 0
 
-            // Exit loop if no tool calls found - this is the normal case
-            if (toolCalls.length === 0) {
-                break
+            while (iterationCount < maxIterations) {
+                let fullResponse = ''
+                const streamChunk = (chunk: string) => {
+                    fullResponse += chunk
+                    onChunk(chunk)
+                }
+
+                if (model.provider === 'ollama') {
+                    await this.retryOperation(() => this.streamFromOllama(currentMessages, model, streamChunk), 'StreamOllama')
+                } else if (model.provider === 'openai') {
+                    await this.retryOperation(() => this.streamFromOpenAI(currentMessages, model, streamChunk), 'StreamOpenAI')
+                } else if (model.provider === 'google') {
+                    // Google streaming implementation pending retry support
+                    await this.streamFromGoogle(currentMessages, model, streamChunk)
+                } else {
+                    await this.retryOperation(() => this.streamFromAnthropic(currentMessages, model, streamChunk), 'StreamAnthropic')
+                }
+
+                const toolCalls = this.extractToolCalls(fullResponse)
+
+                // Exit loop if no tool calls found - this is the normal case
+                if (toolCalls.length === 0) {
+                    break
+                }
+
+                // Only continue looping if we actually executed tools
+                currentMessages.push({ role: 'assistant', content: fullResponse })
+
+                let toolsExecuted = 0
+                for (const toolCall of toolCalls) {
+                    onChunk(`\n\n*[Executing ${toolCall.name}...]*\n`)
+
+                    const result = await ToolService.executeTool(toolCall.name, toolCall.arguments)
+                    toolsExecuted++
+
+                    currentMessages.push({
+                        role: 'system',
+                        content: `Tool Result [${result.tool}]: ${result.result}`
+                    })
+
+                    onChunk(`\n*[${toolCall.name} completed]*\n\n`)
+                }
+
+                // If no tools were successfully executed, break to prevent infinite loops
+                if (toolsExecuted === 0) {
+                    break
+                }
+
+                iterationCount++
             }
-
-            // Only continue looping if we actually executed tools
-            currentMessages.push({ role: 'assistant', content: fullResponse })
-
-            let toolsExecuted = 0
-            for (const toolCall of toolCalls) {
-                onChunk(`\n\n*[Executing ${toolCall.name}...]*\n`)
-
-                const result = await ToolService.executeTool(toolCall.name, toolCall.arguments)
-                toolsExecuted++
-
-                currentMessages.push({
-                    role: 'system',
-                    content: `Tool Result [${result.tool}]: ${result.result}`
-                })
-
-                onChunk(`\n*[${toolCall.name} completed]*\n\n`)
-            }
-
-            // If no tools were successfully executed, break to prevent infinite loops
-            if (toolsExecuted === 0) {
-                break
-            }
-
-            iterationCount++
+        } catch (error) {
+            ErrorLogger.log(
+                `Stream processing error: ${error instanceof Error ? error.message : String(error)}`,
+                ErrorSeverity.ERROR,
+                'AIService',
+                { modelId: model.id },
+                error
+            )
+            throw error
         }
     }
 
@@ -578,7 +662,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
 
         clearTimeout(timeoutId)
 
-        if (!response.ok) throw new Error(`Ollama error: ${response.statusText}`)
+        if (!response.ok) throw new Error(`Ollama stream error: ${response.status} ${response.statusText}`)
         if (!response.body) throw new Error('No response body')
 
         const reader = response.body.getReader()

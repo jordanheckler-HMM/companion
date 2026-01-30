@@ -12,9 +12,14 @@ import { RAGService } from '@/services/ragService'
 import { ModelRegistry } from '@/services/ModelRegistry'
 import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ToastManager } from '@/components/ToastManager'
 
 // Initialize PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`
+
+import { MiniChat } from '@/components/chat/MiniChat'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
 function App() {
   const {
@@ -26,6 +31,20 @@ function App() {
 
   const [activeModal, setActiveModal] = useState<string | null>(null)
   const [apiKeyInput, setApiKeyInput] = useState('')
+  const [windowLabel, setWindowLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Determine which window we are in
+    const identifyWindow = async () => {
+      try {
+        const win = getCurrentWindow()
+        setWindowLabel(win.label)
+      } catch (e) {
+        setWindowLabel('main')
+      }
+    }
+    identifyWindow()
+  }, [])
 
   // Theme management
   useEffect(() => {
@@ -123,245 +142,257 @@ function App() {
     console.log(`File ${fileId}: ${action}`)
   }
 
+  if (windowLabel === 'panel') {
+    return (
+      <div className="h-screen w-screen overflow-hidden bg-transparent font-sans">
+        <MiniChat />
+      </div>
+    )
+  }
+
   return (
-    <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground transition-all duration-500 font-sans">
+
       <Sidebar currentView={currentView} onViewChange={setCurrentView} />
 
       <main className="flex-1 overflow-hidden">
-        {currentView === 'home' && <ChatWindow />}
-
-        {currentView === 'files' && (
-          <div className="h-full overflow-y-auto">
-            <div className="glass-light border-b border-white/10 px-6 py-4 sticky top-0 z-10">
-              <h2 className="text-lg font-semibold">Files</h2>
-              <p className="text-sm text-muted-foreground">Manage your documents and knowledge base</p>
-            </div>
-            <FileGrid
-              files={files}
-              onFileAction={handleFileAction}
-              onUpload={async (file) => {
-                try {
-                  // 1. Read file content
-                  const content = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader()
-                    reader.onerror = reject
-
-                    if (file.type === 'application/pdf') {
-                      reader.onload = async (e) => {
-                        try {
-                          const typedarray = new Uint8Array(e.target?.result as ArrayBuffer)
-                          const pdf = await pdfjsLib.getDocument(typedarray).promise
-                          let fullText = ''
-                          for (let i = 1; i <= pdf.numPages; i++) {
-                            const page = await pdf.getPage(i)
-                            const textContent = await page.getTextContent()
-                            fullText += textContent.items.map((item: any) => item.str).join(' ') + '\n'
-                          }
-                          resolve(fullText)
-                        } catch (err) { reject(err) }
-                      }
-                      reader.readAsArrayBuffer(file)
-                    } else if (file.name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-                      reader.onload = async (e) => {
-                        try {
-                          const arrayBuffer = e.target?.result as ArrayBuffer
-                          const result = await mammoth.extractRawText({ arrayBuffer })
-                          resolve(result.value)
-                        } catch (err) { reject(err) }
-                      }
-                      reader.readAsArrayBuffer(file)
-                    } else {
-                      reader.onload = (e) => resolve(e.target?.result as string || '')
-                      reader.readAsText(file)
-                    }
-                  })
-
-                  // 2. Add to library
-                  const fileId = addFile({
-                    filename: file.name,
-                    size: `${(file.size / 1024).toFixed(1)} KB`,
-                    type: file.type || 'unknown',
-                    lastModified: new Date().toLocaleDateString(),
-                    content
-                  } as any)
-
-                  // 3. Process into Knowledge Base (RAG)
-                  const ragService = new RAGService(settings.aiSettings)
-                  const chunks = ragService.chunkText(content, fileId)
-
-                  const statusId = addMessage({
-                    role: 'assistant',
-                    content: `Indexing **${file.name}** into knowledge base...`
-                  })
-
-                  const enrichedChunks = await ragService.generateEmbeddings(chunks)
-                  addKnowledgeChunks(enrichedChunks)
-
-                  updateMessage(statusId, `Completed indexing **${file.name}**. It is now part of my permanent knowledge.`)
-                } catch (error) {
-                  console.error('File knowledge upload error:', error)
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {currentView === 'github' && <GitHubDashboard />}
-        {currentView === 'calendar' && <CalendarDashboard />}
-        {currentView === 'notion' && <NotionDashboard />}
-
-        {currentView === 'integrations' && (
-          <div className="h-full overflow-y-auto relative">
-            <div className="glass-light border-b border-white/10 px-6 py-4">
-              <h2 className="text-lg font-semibold">Integrations</h2>
-              <p className="text-sm text-muted-foreground">Connect your apps</p>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Google Calendar */}
-                <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
-                  <div className="text-4xl mb-3">📅</div>
-                  <h3 className="font-semibold mb-2">Google Calendar</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Sync your calendar events
-                  </p>
-                  {settings.aiSettings.googleCalendarApiKey ? (
-                    <button
-                      onClick={() => {
-                        updateSettings({ aiSettings: { ...settings.aiSettings, googleCalendarApiKey: undefined } })
-                        removeConnectedApp('Google Calendar')
-                      }}
-                      className="glass-strong bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
-                    >
-                      Disconnect
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => { setActiveModal('google_calendar'); setApiKeyInput('') }}
-                      className="glass-strong hover:bg-white/10 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
-                    >
-                      Connect
-                    </button>
-                  )}
-                </div>
-
-                {/* Notion */}
-                <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
-                  <div className="text-4xl mb-3">📝</div>
-                  <h3 className="font-semibold mb-2">Notion</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Access your workspace
-                  </p>
-                  {settings.aiSettings.notionApiKey ? (
-                    <button
-                      onClick={() => {
-                        updateSettings({ aiSettings: { ...settings.aiSettings, notionApiKey: undefined } })
-                        removeConnectedApp('Notion')
-                      }}
-                      className="glass-strong bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
-                    >
-                      Disconnect
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => { setActiveModal('notion'); setApiKeyInput('') }}
-                      className="glass-strong hover:bg-white/10 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
-                    >
-                      Connect
-                    </button>
-                  )}
-                </div>
-
-                {/* GitHub */}
-                <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
-                  <div className="text-4xl mb-3">💻</div>
-                  <h3 className="font-semibold mb-2">GitHub</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Manage repositories
-                  </p>
-                  {settings.aiSettings.githubApiKey ? (
-                    <button
-                      onClick={() => {
-                        updateSettings({ aiSettings: { ...settings.aiSettings, githubApiKey: undefined } })
-                        removeConnectedApp('GitHub')
-                      }}
-                      className="glass-strong bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
-                    >
-                      Disconnect
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => { setActiveModal('github'); setApiKeyInput('') }}
-                      className="glass-strong hover:bg-white/10 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
-                    >
-                      Connect
-                    </button>
-                  )}
-                </div>
+        <ErrorBoundary>
+          {currentView === 'home' && <ChatWindow />}
+          {currentView === 'files' && (
+            // ... existing files content ...
+            <div className="h-full overflow-y-auto">
+              <div className="glass-light border-b border-white/10 px-6 py-4 sticky top-0 z-10">
+                <h2 className="text-lg font-semibold">Files</h2>
+                <p className="text-sm text-muted-foreground">Manage your documents and knowledge base</p>
               </div>
-            </div>
+              <FileGrid
+                files={files}
+                onFileAction={handleFileAction}
+                onUpload={async (file) => {
+                  try {
+                    // 1. Read file content
+                    const content = await new Promise<string>((resolve, reject) => {
+                      const reader = new FileReader()
+                      reader.onerror = reject
 
-            {/* API Key Modal */}
-            {activeModal && (
-              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/20 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-                  <h3 className="text-lg font-bold mb-2">Enter API Key</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {activeModal === 'google_calendar' && 'Enter your Google Cloud API Key with Calendar API enabled.'}
-                    {activeModal === 'notion' && 'Enter your Notion Integration Token.'}
-                    {activeModal === 'github' && 'Enter your GitHub Personal Access Token.'}
-                  </p>
-
-                  <input
-                    type="password"
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    autoFocus
-                  />
-
-                  <div className="flex justify-end gap-3">
-                    <button
-                      onClick={() => setActiveModal(null)}
-                      className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      disabled={!apiKeyInput.trim()}
-                      onClick={() => {
-                        const updates: any = { ...settings.aiSettings }
-                        let appName = ''
-
-                        if (activeModal === 'google_calendar') {
-                          updates.googleCalendarApiKey = apiKeyInput
-                          appName = 'Google Calendar'
-                        } else if (activeModal === 'notion') {
-                          updates.notionApiKey = apiKeyInput
-                          appName = 'Notion'
-                        } else if (activeModal === 'github') {
-                          updates.githubApiKey = apiKeyInput
-                          appName = 'GitHub'
+                      if (file.type === 'application/pdf') {
+                        reader.onload = async (e) => {
+                          try {
+                            const typedarray = new Uint8Array(e.target?.result as ArrayBuffer)
+                            const pdf = await pdfjsLib.getDocument(typedarray).promise
+                            let fullText = ''
+                            for (let i = 1; i <= pdf.numPages; i++) {
+                              const page = await pdf.getPage(i)
+                              const textContent = await page.getTextContent()
+                              fullText += textContent.items.map((item: any) => item.str).join(' ') + '\n'
+                            }
+                            resolve(fullText)
+                          } catch (err) { reject(err) }
                         }
+                        reader.readAsArrayBuffer(file)
+                      } else if (file.name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                        reader.onload = async (e) => {
+                          try {
+                            const arrayBuffer = e.target?.result as ArrayBuffer
+                            const result = await mammoth.extractRawText({ arrayBuffer })
+                            resolve(result.value)
+                          } catch (err) { reject(err) }
+                        }
+                        reader.readAsArrayBuffer(file)
+                      } else {
+                        reader.onload = (e) => resolve(e.target?.result as string || '')
+                        reader.readAsText(file)
+                      }
+                    })
 
-                        updateSettings({ aiSettings: updates })
-                        addConnectedApp(appName)
-                        setActiveModal(null)
-                      }}
-                      className="glass-strong bg-primary/20 hover:bg-primary/30 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-                    >
-                      Save & Connect
-                    </button>
+                    // 2. Add to library
+                    const fileId = addFile({
+                      filename: file.name,
+                      size: `${(file.size / 1024).toFixed(1)} KB`,
+                      type: file.type || 'unknown',
+                      lastModified: new Date().toLocaleDateString(),
+                      content
+                    } as any)
+
+                    // 3. Process into Knowledge Base (RAG)
+                    const ragService = new RAGService(settings.aiSettings)
+                    const chunks = ragService.chunkText(content, fileId)
+
+                    const statusId = addMessage({
+                      role: 'assistant',
+                      content: `Indexing **${file.name}** into knowledge base...`
+                    })
+
+                    const enrichedChunks = await ragService.generateEmbeddings(chunks)
+                    addKnowledgeChunks(enrichedChunks)
+
+                    updateMessage(statusId, `Completed indexing **${file.name}**. It is now part of my permanent knowledge.`)
+                  } catch (error) {
+                    console.error('File knowledge upload error:', error)
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          {currentView === 'github' && <GitHubDashboard />}
+          {currentView === 'calendar' && <CalendarDashboard />}
+          {currentView === 'notion' && <NotionDashboard />}
+
+          {currentView === 'integrations' && (
+            <div className="h-full overflow-y-auto relative">
+              <div className="glass-light border-b border-white/10 px-6 py-4">
+                <h2 className="text-lg font-semibold">Integrations</h2>
+                <p className="text-sm text-muted-foreground">Connect your apps</p>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Google Calendar */}
+                  <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
+                    <div className="text-4xl mb-3">📅</div>
+                    <h3 className="font-semibold mb-2">Google Calendar</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Sync your calendar events
+                    </p>
+                    {settings.aiSettings.googleCalendarApiKey ? (
+                      <button
+                        onClick={() => {
+                          updateSettings({ aiSettings: { ...settings.aiSettings, googleCalendarApiKey: undefined } })
+                          removeConnectedApp('Google Calendar')
+                        }}
+                        className="glass-strong bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
+                      >
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setActiveModal('google_calendar'); setApiKeyInput('') }}
+                        className="glass-strong hover:bg-white/10 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
+                      >
+                        Connect
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Notion */}
+                  <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
+                    <div className="text-4xl mb-3">📝</div>
+                    <h3 className="font-semibold mb-2">Notion</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Access your workspace
+                    </p>
+                    {settings.aiSettings.notionApiKey ? (
+                      <button
+                        onClick={() => {
+                          updateSettings({ aiSettings: { ...settings.aiSettings, notionApiKey: undefined } })
+                          removeConnectedApp('Notion')
+                        }}
+                        className="glass-strong bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
+                      >
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setActiveModal('notion'); setApiKeyInput('') }}
+                        className="glass-strong hover:bg-white/10 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
+                      >
+                        Connect
+                      </button>
+                    )}
+                  </div>
+
+                  {/* GitHub */}
+                  <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
+                    <div className="text-4xl mb-3">💻</div>
+                    <h3 className="font-semibold mb-2">GitHub</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Manage repositories
+                    </p>
+                    {settings.aiSettings.githubApiKey ? (
+                      <button
+                        onClick={() => {
+                          updateSettings({ aiSettings: { ...settings.aiSettings, githubApiKey: undefined } })
+                          removeConnectedApp('GitHub')
+                        }}
+                        className="glass-strong bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
+                      >
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setActiveModal('github'); setApiKeyInput('') }}
+                        className="glass-strong hover:bg-white/10 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
+                      >
+                        Connect
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-        )}
 
-        {currentView === 'settings' && <SettingsPanel />}
+              {/* API Key Modal */}
+              {activeModal && (
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/20 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                    <h3 className="text-lg font-bold mb-2">Enter API Key</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {activeModal === 'google_calendar' && 'Enter your Google Cloud API Key with Calendar API enabled.'}
+                      {activeModal === 'notion' && 'Enter your Notion Integration Token.'}
+                      {activeModal === 'github' && 'Enter your GitHub Personal Access Token.'}
+                    </p>
+
+                    <input
+                      type="password"
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder="sk-..."
+                      className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      autoFocus
+                    />
+
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => setActiveModal(null)}
+                        className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        disabled={!apiKeyInput.trim()}
+                        onClick={() => {
+                          const updates: any = { ...settings.aiSettings }
+                          let appName = ''
+
+                          if (activeModal === 'google_calendar') {
+                            updates.googleCalendarApiKey = apiKeyInput
+                            appName = 'Google Calendar'
+                          } else if (activeModal === 'notion') {
+                            updates.notionApiKey = apiKeyInput
+                            appName = 'Notion'
+                          } else if (activeModal === 'github') {
+                            updates.githubApiKey = apiKeyInput
+                            appName = 'GitHub'
+                          }
+
+                          updateSettings({ aiSettings: updates })
+                          addConnectedApp(appName)
+                          setActiveModal(null)
+                        }}
+                        className="glass-strong bg-primary/20 hover:bg-primary/30 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        Save & Connect
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentView === 'settings' && <SettingsPanel />}
+        </ErrorBoundary>
       </main>
+      <ToastManager />
     </div>
   )
 }
