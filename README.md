@@ -6,7 +6,7 @@ Companion is a modern, **local-first** AI desktop assistant built with **Tauri v
 
 ### 🧠 Dual Intelligence Modes
 - **Local Mode**: Runs entirely on your machine using **Ollama** (Llama 3, Mistral, etc.) for maximum privacy and offline capability.
-- **Cloud Mode**: Connects to top-tier models like **GPT-4o**, **Claude 3.5 Sonnet**, or **Gemini 1.5 Pro** for complex reasoning and highest quality responses.
+- **Cloud Mode**: Connects to top-tier models like **GPT-5.2**, **Claude 3.5 Sonnet**, or **Gemini 3.0** for complex reasoning and highest quality responses.
 - **Flexible Choice**: Easily toggle between modes based on your immediate needs for privacy vs. power.
 
 ### ⚡ Mini Chat (Quick Access)
