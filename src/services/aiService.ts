@@ -286,7 +286,7 @@ The editor will open with this content pre-loaded. The user can then edit, save,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.settings.apiKey}`,
+                'Authorization': `Bearer ${this.getApiKey('openai')}`,
             },
             body: JSON.stringify(body),
         })
@@ -384,6 +384,37 @@ The editor will open with this content pre-loaded. The user can then edit, save,
     /**
      * Send message to Anthropic
      */
+    private getApiKey(provider: 'openai' | 'anthropic' | 'google'): string | undefined {
+        if (provider === 'google') return this.settings.googleApiKey || this.settings.apiKey
+        if (provider === 'anthropic') return this.settings.anthropicApiKey || this.settings.apiKey
+        if (provider === 'openai') return this.settings.openaiApiKey || this.settings.apiKey
+        return this.settings.apiKey
+    }
+
+    private getAnthropicTools(): any[] {
+        const allTools = ToolService.getToolDefinitions()
+        const toolSettings = this.settings.toolsEnabled || {
+            web_search: true,
+            url_reader: true,
+            file_system: true,
+            execute_code: true,
+            google_calendar: true,
+            notion: true,
+            github: true,
+        }
+
+        return allTools
+            .filter(t => toolSettings[t.name as keyof typeof toolSettings] !== false)
+            .map(t => ({
+                name: t.name,
+                description: t.description,
+                input_schema: t.parameters
+            }))
+    }
+
+    /**
+     * Send message to Anthropic
+     */
     private async sendToAnthropic(messages: ChatMessage[], model: ModelDefinition): Promise<ChatResponse> {
         // Convert messages format for Anthropic
         const systemMessage = messages.find((m) => m.role === 'system')
@@ -393,7 +424,7 @@ The editor will open with this content pre-loaded. The user can then edit, save,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': this.settings.apiKey,
+                'x-api-key': this.getApiKey('anthropic') || '',
                 'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
@@ -401,6 +432,7 @@ The editor will open with this content pre-loaded. The user can then edit, save,
                 max_tokens: 4096,
                 system: systemMessage?.content,
                 messages: conversationMessages,
+                tools: this.getAnthropicTools(),
             }),
         })
 
@@ -417,6 +449,18 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         }
 
         const data = await response.json()
+
+        // Handle tool use in response
+        if (data.stop_reason === 'tool_use') {
+            const toolBlock = data.content.find((c: any) => c.type === 'tool_use')
+            if (toolBlock) {
+                // Convert to our internal tool format so the chat UI handles it
+                return {
+                    message: `[TOOL:${toolBlock.name}]${JSON.stringify(toolBlock.input)}[/TOOL]`
+                }
+            }
+        }
+
         return {
             message: data.content?.[0]?.text || '',
         }
@@ -573,8 +617,8 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                 } else if (model.provider === 'openai') {
                     await this.retryOperation(() => this.streamFromOpenAI(currentMessages, model, streamChunk), 'StreamOpenAI')
                 } else if (model.provider === 'google') {
-                    // Google streaming implementation pending retry support
-                    await this.streamFromGoogle(currentMessages, model, streamChunk)
+                    // Added retry support for Google streaming
+                    await this.retryOperation(() => this.streamFromGoogle(currentMessages, model, streamChunk), 'StreamGoogle')
                 } else {
                     await this.retryOperation(() => this.streamFromAnthropic(currentMessages, model, streamChunk), 'StreamAnthropic')
                 }
@@ -769,7 +813,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': this.settings.apiKey,
+                'x-api-key': this.getApiKey('anthropic') || '',
                 'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
@@ -777,6 +821,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                 max_tokens: 4096,
                 system: systemMessage?.content,
                 messages: conversationMessages,
+                tools: this.getAnthropicTools(),
                 stream: true,
             }),
         })
@@ -787,6 +832,10 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let buffer = ''
+
+        // Track current tool use
+        let currentToolName = ''
+        let currentToolInput = ''
 
         while (true) {
             const { done, value } = await reader.read()
@@ -804,9 +853,35 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
 
                 try {
                     const data = JSON.parse(trimmed)
+
+                    // Handle text content
                     if (data.type === 'content_block_delta' && data.delta?.text) {
                         onChunk(data.delta.text)
                     }
+
+                    // Handle tool use start
+                    if (data.type === 'content_block_start' && data.content_block?.type === 'tool_use') {
+                        currentToolName = data.content_block.name
+                        currentToolInput = ''
+                    }
+
+                    // Handle tool input delta
+                    if (data.type === 'content_block_delta' && data.delta?.type === 'input_json_delta') {
+                        currentToolInput += data.delta.partial_json
+                    }
+
+                    // Handle content block stop (tool use finished)
+                    if (data.type === 'content_block_stop' && currentToolName) {
+                        // Normalize to internal format for execution
+                        // [TOOL:name]{"param": "value"}[/TOOL]
+                        const normalizedToolCall = `[TOOL:${currentToolName}]${currentToolInput}[/TOOL]`
+                        onChunk(normalizedToolCall)
+
+                        // Reset
+                        currentToolName = ''
+                        currentToolInput = ''
+                    }
+
                 } catch (e) {
                     // Ignore other event types
                 }
@@ -842,7 +917,8 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
      * Test cloud provider connection
      */
     private async testCloudConnection(): Promise<{ success: boolean; message: string }> {
-        if (!this.settings.apiKey) {
+        const apiKey = this.getApiKey(this.settings.cloudProvider)
+        if (!apiKey) {
             return {
                 success: false,
                 message: 'API key is required',
@@ -886,7 +962,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
      * Test Google connection
      */
     private async testGoogleConnection(): Promise<{ success: boolean; message: string }> {
-        const apiKey = this.settings.googleApiKey || this.settings.apiKey
+        const apiKey = this.getApiKey('google')
         if (!apiKey) {
             return {
                 success: false,
@@ -924,7 +1000,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
      * Send message to Google Gemini
      */
     private async sendToGoogle(messages: ChatMessage[], model: ModelDefinition): Promise<ChatResponse> {
-        const apiKey = this.settings.googleApiKey || this.settings.apiKey
+        const apiKey = this.getApiKey('google')
         const contents = messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role === 'assistant' ? 'model' : 'user',
             parts: [{ text: m.content }]
@@ -958,7 +1034,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
      * Stream from Google Gemini
      */
     private async streamFromGoogle(messages: ChatMessage[], model: ModelDefinition, onChunk: (chunk: string) => void) {
-        const apiKey = this.settings.googleApiKey || this.settings.apiKey
+        const apiKey = this.getApiKey('google')
         const contents = messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role === 'assistant' ? 'model' : 'user',
             parts: [{ text: m.content }]

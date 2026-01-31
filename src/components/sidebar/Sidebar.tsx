@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Home, FileText, Puzzle, Settings, ChevronLeft, ChevronRight, Calendar, Github, Database } from 'lucide-react'
+import { Home, FileText, Puzzle, Settings, ChevronLeft, ChevronRight, Calendar, Github, Database, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store'
@@ -113,6 +113,13 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
           collapsed={collapsed}
           active={currentView === 'files'}
           onClick={() => onViewChange?.('files')}
+        />
+        <NavItem
+          icon={Bot}
+          label="Agents"
+          collapsed={collapsed}
+          active={currentView === 'agents'}
+          onClick={() => onViewChange?.('agents')}
         />
         <NavItem
           icon={Puzzle}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
-import { TestTube, Sparkles, ChevronDown } from 'lucide-react'
+import { TestTube, Sparkles, ChevronDown, Folder } from 'lucide-react'
+import { VaultService } from '@/services/VaultService'
 import { Button } from '@/components/ui/button'
 import { AIService } from '@/services/aiService'
 import { SettingsSection } from './SettingsSection'
@@ -8,7 +9,7 @@ import { GlassSlider } from './GlassSlider'
 import { LiveThemePreview } from './LiveThemePreview'
 
 export function SettingsPanel() {
-    const { settings, updateSettings } = useStore()
+    const { settings, updateSettings, vaultPath, setVaultPath } = useStore()
     const [testing, setTesting] = useState(false)
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
     const [availableModels, setAvailableModels] = useState<string[]>([])
@@ -18,12 +19,12 @@ export function SettingsPanel() {
         const fetchModels = async () => {
             const aiService = new AIService(settings.aiSettings)
             // Filter models by the current provider type (local or cloud)
-            const type = settings.aiSettings.providerType || 'local'
+            const type = settings.aiSettings.intelligenceMode || 'local'
             const models = await aiService.getModels(type)
             setAvailableModels(models)
         }
         fetchModels()
-    }, [settings.aiSettings.providerType, settings.aiSettings.ollamaUrl, settings.aiSettings.cloudProvider])
+    }, [settings.aiSettings.intelligenceMode, settings.aiSettings.ollamaUrl, settings.aiSettings.cloudProvider])
 
     const handleTestConnection = async () => {
         setTesting(true)
@@ -212,8 +213,8 @@ export function SettingsPanel() {
                                     {(['local', 'cloud'] as const).map((p) => (
                                         <button
                                             key={p}
-                                            onClick={() => updateSettings({ aiSettings: { ...settings.aiSettings, providerType: p } })}
-                                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-all ${settings.aiSettings.providerType === p
+                                            onClick={() => updateSettings({ aiSettings: { ...settings.aiSettings, intelligenceMode: p } })}
+                                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-all ${settings.aiSettings.intelligenceMode === p
                                                 ? 'bg-foreground text-zinc-950 shadow-md'
                                                 : 'hover:bg-foreground/10'
                                                 }`}
@@ -224,7 +225,7 @@ export function SettingsPanel() {
                                 </div>
                             </div>
 
-                            {settings.aiSettings.providerType === 'local' && (
+                            {settings.aiSettings.intelligenceMode === 'local' && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                                     <div>
                                         <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Ollama Endpoint URL</label>
@@ -248,13 +249,12 @@ export function SettingsPanel() {
                                         <div className="relative">
                                             <select
                                                 className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm appearance-none outline-none focus:ring-1 focus:ring-foreground/20 cursor-pointer"
-                                                value={settings.aiSettings.ollamaModel}
+                                                value={settings.aiSettings.preferredModelId}
                                                 onChange={(e) =>
                                                     updateSettings({
                                                         aiSettings: {
                                                             ...settings.aiSettings,
-                                                            ollamaModel: e.target.value,
-                                                            // Also update preferredModelId to keep chat in sync
+                                                            // Update preferredModelId directly
                                                             preferredModelId: e.target.value
                                                         },
                                                     })
@@ -276,7 +276,7 @@ export function SettingsPanel() {
                                 </div>
                             )}
 
-                            {settings.aiSettings.providerType === 'cloud' && (
+                            {settings.aiSettings.intelligenceMode === 'cloud' && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                                     <div>
                                         <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Cloud Provider</label>
@@ -299,21 +299,31 @@ export function SettingsPanel() {
                                     </div>
                                     <div>
                                         <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">
-                                            {settings.aiSettings.cloudProvider === 'google' ? 'Google API Key' : 'Secure API Key'}
+                                            {settings.aiSettings.cloudProvider === 'google' ? 'Google API Key' :
+                                                settings.aiSettings.cloudProvider === 'anthropic' ? 'Anthropic API Key' : 'OpenAI API Key'}
                                         </label>
                                         <input
                                             type="password"
                                             className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20"
-                                            placeholder={settings.aiSettings.cloudProvider === 'google' ? 'AIza...' : 'sk-...'}
-                                            value={settings.aiSettings.cloudProvider === 'google' ? (settings.aiSettings.googleApiKey || '') : settings.aiSettings.apiKey}
-                                            onChange={(e) =>
+                                            placeholder={settings.aiSettings.cloudProvider === 'google' ? 'AIza...' :
+                                                settings.aiSettings.cloudProvider === 'anthropic' ? 'sk-ant-...' : 'sk-...'}
+                                            value={
+                                                settings.aiSettings.cloudProvider === 'google' ? (settings.aiSettings.googleApiKey || '') :
+                                                    settings.aiSettings.cloudProvider === 'anthropic' ? (settings.aiSettings.anthropicApiKey || '') :
+                                                        (settings.aiSettings.openaiApiKey || '')
+                                            }
+                                            onChange={(e) => {
+                                                const provider = settings.aiSettings.cloudProvider
+                                                const keyField = provider === 'google' ? 'googleApiKey' :
+                                                    provider === 'anthropic' ? 'anthropicApiKey' : 'openaiApiKey'
+
                                                 updateSettings({
                                                     aiSettings: {
                                                         ...settings.aiSettings,
-                                                        [settings.aiSettings.cloudProvider === 'google' ? 'googleApiKey' : 'apiKey']: e.target.value
+                                                        [keyField]: e.target.value
                                                     },
                                                 })
-                                            }
+                                            }}
                                         />
                                     </div>
                                     <div>
@@ -321,13 +331,12 @@ export function SettingsPanel() {
                                         <div className="relative">
                                             <select
                                                 className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm appearance-none outline-none focus:ring-1 focus:ring-foreground/20 cursor-pointer"
-                                                value={settings.aiSettings.cloudModel}
+                                                value={settings.aiSettings.preferredModelId}
                                                 onChange={(e) =>
                                                     updateSettings({
                                                         aiSettings: {
                                                             ...settings.aiSettings,
-                                                            cloudModel: e.target.value,
-                                                            // Also update preferredModelId to keep chat in sync
+                                                            // Update preferredModelId directly
                                                             preferredModelId: e.target.value
                                                         },
                                                     })
@@ -376,6 +385,65 @@ export function SettingsPanel() {
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </SettingsSection>
+
+
+                    {/* VAULT CONFIG SECTION */}
+                    <SettingsSection title="Vault Configuration" defaultOpen={false}>
+                        <div className="space-y-4 bg-foreground/5 p-5 rounded-2xl border border-foreground/5">
+                            <p className="text-xs text-muted-foreground mb-4">
+                                Choose a local folder where your agents will store their work.
+                                This can be an existing Obsidian vault or any directory on your computer.
+                            </p>
+
+                            <div className="flex items-end gap-3">
+                                <div className="flex-1">
+                                    <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Vault Path</label>
+                                    <div className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 text-foreground/60 cursor-not-allowed">
+                                        <Folder className="w-4 h-4 opacity-50" />
+                                        <span className="truncate">
+                                            {vaultPath || 'No vault selected'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <Button
+                                    onClick={async () => {
+                                        const path = await VaultService.selectVaultLocation()
+                                        if (path) {
+                                            setVaultPath(path)
+                                        }
+                                    }}
+                                    className="bg-primary-accent hover:opacity-90 text-white shadow-lg px-4 py-2.5 rounded-xl text-sm font-bold h-[42px]"
+                                >
+                                    Choose Folder
+                                </Button>
+                            </div>
+
+                            {vaultPath && (
+                                <div className="mt-4">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={async () => {
+                                            try {
+                                                await VaultService.writeToVault('test-write.txt', 'Vault connection test successful from Settings Panel')
+                                                alert(`Success! Wrote to ${vaultPath}/test-write.txt. Check your folder.`)
+                                            } catch (err: any) {
+                                                console.error(err)
+                                                alert(`Failed to write to vault: ${err.message}`)
+                                            }
+                                        }}
+                                        className="text-xs h-8 border-white/10 hover:bg-white/5"
+                                    >
+                                        Test Vault Permissions
+                                    </Button>
+                                    <p className="text-[10px] text-green-400 mt-2 flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                        Vault Active
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </SettingsSection>
 

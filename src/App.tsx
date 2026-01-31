@@ -5,6 +5,7 @@ import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import { GitHubDashboard } from '@/components/dashboard/GitHubDashboard'
 import { CalendarDashboard } from '@/components/dashboard/CalendarDashboard'
 import { NotionDashboard } from '@/components/dashboard/NotionDashboard'
+import { AgentLab } from '@/components/agents/AgentLab'
 
 import { useEffect, useState } from 'react'
 import { useStore } from '@/store'
@@ -20,6 +21,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs
 
 import { MiniChat } from '@/components/chat/MiniChat'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { ExecutionStatus } from '@/components/agents/ExecutionStatus'
 
 function App() {
   const {
@@ -158,6 +160,7 @@ function App() {
       <main className="flex-1 overflow-hidden">
         <ErrorBoundary>
           {currentView === 'home' && <ChatWindow />}
+          {currentView === 'agents' && <AgentLab />}
           {currentView === 'files' && (
             // ... existing files content ...
             <div className="h-full overflow-y-auto">
@@ -393,6 +396,7 @@ function App() {
         </ErrorBoundary>
       </main>
       <ToastManager />
+      <ExecutionStatus />
     </div>
   )
 }

@@ -50,7 +50,9 @@ export interface AISettings {
   ollamaModel: string // Deprecated, kept for migration
   // Cloud API settings
   cloudProvider: 'openai' | 'anthropic' | 'google'
-  apiKey: string
+  apiKey: string // Deprecated, kept for migration
+  openaiApiKey?: string
+  anthropicApiKey?: string
   googleApiKey?: string // Separate key for Google if needed, or share apiKey
   cloudModel: string // Deprecated, kept for migration
   // Tool settings
@@ -79,6 +81,74 @@ export interface Settings {
   accentTintStrength: number
   glassBlur: number
   aiSettings: AISettings
+}
+
+// Agent Automation Types
+export interface AgentBlueprint {
+  id: string
+  name: string
+  description?: string
+  icon: string // Lucide icon name
+  color?: string // Hex or tailwind color
+  systemPrompt: string
+  preferredModelId?: string // if different from global
+  enabledTools: string[] // specific subset of tools
+  createdAt: string
+}
+
+export interface PipelineStep {
+  id: string
+  type: 'agent_action' | 'save_to_vault' | 'wait' | 'condition' | 'integration_action'
+  agentId?: string        // Which agent runs this step
+  prompt?: string         // What to ask the agent
+  outputVariable?: string // Name to reference this step's output
+
+  // Save to Vault config
+  vaultPath?: string
+  sourceVariable?: string
+  writeMode?: 'overwrite' | 'append'
+  fileSelection?: 'existing' | 'new'
+  fileNaming?: 'manual' | 'auto'
+
+  // Wait config
+  waitDuration?: number   // milliseconds
+
+  // Integration Action config
+  integrationId?: string      // e.g., 'notion', 'github'
+  integrationAction?: string  // e.g., 'create_page', 'create_issue'
+  integrationArgs?: Record<string, string> // e.g., { title: "{{result}}", parent_id: "..." }
+
+  config?: Record<string, any>
+}
+
+export interface Trigger {
+  type: 'schedule' | 'manual' | 'event'
+  scheduleConfig?: {
+    frequency: 'daily' | 'weekly' | 'hourly' | 'custom'
+    time?: string         // "08:00" (24-hour format)
+    dayOfWeek?: number    // 0-6 (Sunday to Saturday)
+    cronExpression?: string
+  }
+}
+
+export interface Automation {
+  id: string
+  name: string
+  description?: string
+  trigger: Trigger
+  pipeline: PipelineStep[]
+  isActive: boolean
+  lastRunAt?: string
+  createdAt: string
+}
+
+export interface AgentLog {
+  id: string
+  automationId: string
+  agentName: string
+  timestamp: string
+  status: 'success' | 'error' | 'running'
+  message: string
 }
 
 // Store state interface
@@ -116,6 +186,8 @@ interface AppState {
   knowledgeBase: KnowledgeChunk[]
   addKnowledgeChunks: (chunks: KnowledgeChunk[]) => void
   clearKnowledgeBase: () => void
+  knowledgeBaseStorageWarning: string | null
+  setKnowledgeBaseStorageWarning: (warning: string | null) => void
 
   // Pending Context (staged integration items for next message)
   pendingContext: PendingContext[]
@@ -132,6 +204,30 @@ interface AppState {
   // Hydration
   hasHydrated: boolean
   setHasHydrated: (state: boolean) => void
+
+  // Agent Automations State
+  agents: AgentBlueprint[]
+  addAgent: (agent: Omit<AgentBlueprint, 'id' | 'createdAt'>) => void
+  updateAgent: (id: string, updates: Partial<AgentBlueprint>) => void
+  removeAgent: (id: string) => void
+
+  automations: Automation[]
+  addAutomation: (automation: Omit<Automation, 'id'>) => void
+  updateAutomation: (id: string, updates: Partial<Automation>) => void
+  removeAutomation: (id: string) => void
+
+  agentLogs: AgentLog[]
+  addAgentLog: (log: Omit<AgentLog, 'id' | 'timestamp'>) => void
+  clearAgentLogs: () => void
+
+  vaultPath: string | null
+  setVaultPath: (path: string | null) => void
+
+  // Automation Execution State
+  runningAutomationIds: string[]
+  setRunningAutomationIds: (ids: string[]) => void
+  automationProgress: Record<string, { current: number, total: number }>
+  updateAutomationProgress: (id: string, progress: { current: number, total: number }) => void
 }
 
 // Create custom storage adapter
@@ -347,10 +443,29 @@ export const useStore = create<AppState>()(
       // Knowledge Base
       knowledgeBase: [],
       addKnowledgeChunks: (chunks) =>
-        set((state) => ({
-          knowledgeBase: [...state.knowledgeBase, ...chunks],
-        })),
-      clearKnowledgeBase: () => set({ knowledgeBase: [] }),
+        set((state) => {
+          const newKb = [...state.knowledgeBase, ...chunks]
+
+          // Safety check for LocalStorage limit (approx 5MB)
+          // We assume ~8000 tokens per chunk approx 32kb? No, embeddings are float[1536] = 6kb each.
+          // 1000 chunks = 6MB. 
+          const estimatedSize = JSON.stringify(newKb).length
+          const limit = 4.5 * 1024 * 1024 // 4.5MB soft limit
+
+          let warning = null
+          if (estimatedSize > limit) {
+            console.warn('Knowledge Base size exceeds safe LocalStorage limits', estimatedSize)
+            warning = 'Knowledge Base is too large for local storage. Some data may not persist.'
+          }
+
+          return {
+            knowledgeBase: newKb,
+            knowledgeBaseStorageWarning: warning
+          }
+        }),
+      clearKnowledgeBase: () => set({ knowledgeBase: [], knowledgeBaseStorageWarning: null }),
+      knowledgeBaseStorageWarning: null,
+      setKnowledgeBaseStorageWarning: (warning) => set({ knowledgeBaseStorageWarning: warning }),
 
       // Pending Context (staged integration items)
       pendingContext: [],
@@ -373,6 +488,69 @@ export const useStore = create<AppState>()(
       // Hydration
       hasHydrated: false,
       setHasHydrated: (state: boolean) => set({ hasHydrated: state }),
+
+      // Agent Automations Implementation
+      agents: [],
+      addAgent: (agent) => set((state) => ({
+        agents: [
+          ...state.agents,
+          { ...agent, id: crypto.randomUUID(), createdAt: new Date().toISOString() }
+        ]
+      })),
+      updateAgent: (id, updates) => set((state) => ({
+        agents: state.agents.map((a) => (a.id === id ? { ...a, ...updates } : a))
+      })),
+      removeAgent: (id) => set((state) => {
+        console.log('[Store] removeAgent called for ID:', id)
+        const newAgents = state.agents.filter((a) => a.id !== id)
+        console.log('[Store] Agents before:', state.agents.length, 'After:', newAgents.length)
+        return {
+          agents: newAgents,
+          // Deactivate automations that use this agent in any step
+          automations: state.automations.map(auto => {
+            const usesAgent = auto.pipeline.some(step => step.agentId === id)
+            return usesAgent ? { ...auto, isActive: false } : auto
+          })
+        }
+      }),
+
+      automations: [],
+      addAutomation: (automation) => set((state) => ({
+        automations: [
+          ...state.automations,
+          { ...automation, id: crypto.randomUUID() }
+        ]
+      })),
+      updateAutomation: (id, updates) => set((state) => ({
+        automations: state.automations.map((a) => (a.id === id ? { ...a, ...updates } : a))
+      })),
+      removeAutomation: (id) => set((state) => {
+        console.log('[Store] removeAutomation called for ID:', id)
+        return {
+          automations: state.automations.filter((a) => a.id !== id),
+          runningAutomationIds: state.runningAutomationIds.filter(rid => rid !== id)
+        }
+      }),
+      setRunningAutomationIds: (ids: string[]) => set({ runningAutomationIds: ids }),
+      automationProgress: {},
+      updateAutomationProgress: (id: string, progress: { current: number, total: number }) => set((state) => ({
+        automationProgress: {
+          ...state.automationProgress,
+          [id]: progress
+        }
+      })),
+
+      agentLogs: [],
+      addAgentLog: (log) => set((state) => ({
+        agentLogs: [
+          { ...log, id: crypto.randomUUID(), timestamp: new Date().toISOString() },
+          ...state.agentLogs
+        ].slice(0, 50) // Keep last 50 logs
+      })),
+      clearAgentLogs: () => set({ agentLogs: [] }),
+      vaultPath: null,
+      setVaultPath: (path) => set({ vaultPath: path }),
+      runningAutomationIds: [],
     }),
     {
       name: 'companion-settings', // Change key to avoid conflict with old localstorage
@@ -385,6 +563,9 @@ export const useStore = create<AppState>()(
         files: state.files,
         messages: state.messages,
         knowledgeBase: state.knowledgeBase,
+        agents: state.agents,
+        automations: state.automations,
+        vaultPath: state.vaultPath,
       }),
       // Deep merge to preserve nested aiSettings fields (like API keys)
       merge: (persistedState: any, currentState: AppState) => {

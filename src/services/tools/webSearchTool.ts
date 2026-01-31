@@ -30,55 +30,74 @@ export class WebSearchTool {
             const parser = new DOMParser()
             const doc = parser.parseFromString(html, 'text/html')
 
-            // DDG HTML structure can vary. Let's try multiple selectors.
-            let resultBlocks = Array.from(doc.querySelectorAll('.result__body'))
+            let results: { title: string, url: string, snippet: string }[] = []
 
-            // Fallback to simpler selector if first one fails
-            if (resultBlocks.length === 0) {
-                resultBlocks = Array.from(doc.querySelectorAll('.result'))
-            }
-
-            const results: { title: string, url: string, snippet: string }[] = []
-
+            // Strategy 1: Standard Selectors
+            const resultBlocks = Array.from(doc.querySelectorAll('.result__body, .result'))
             for (const block of resultBlocks) {
                 if (results.length >= 5) break
-
                 const titleEl = block.querySelector('.result__a')
                 const snippetEl = block.querySelector('.result__snippet')
 
                 if (titleEl) {
-                    let url = titleEl.getAttribute('href') || ''
-                    // Handle DDG redirects
-                    if (url.includes('uddg=')) {
-                        try {
-                            const encodedUrl = url.split('uddg=')[1].split('&')[0]
-                            url = decodeURIComponent(encodedUrl)
-                        } catch (e) {
-                            // keep original url if decode fails
-                        }
-                    } else if (url.startsWith('//')) {
-                        url = 'https:' + url
+                    const extractedUrl = this.extractUrl(titleEl.getAttribute('href'))
+                    if (extractedUrl) {
+                        results.push({
+                            title: titleEl.textContent?.trim() || 'No Title',
+                            url: extractedUrl,
+                            snippet: snippetEl?.textContent?.trim() || 'No preview available.'
+                        })
                     }
+                }
+            }
 
-                    results.push({
-                        title: titleEl.textContent?.trim() || 'No Title',
-                        url: url,
-                        snippet: snippetEl?.textContent?.trim() || 'No preview available.'
-                    })
+            // Strategy 2: Fallback to generic link parsing if Strategy 1 found nothing
+            // Look for any links that point to DDG redirection service
+            if (results.length === 0) {
+                const links = Array.from(doc.querySelectorAll('a[href*="/l/?uddg="]'))
+                for (const link of links) {
+                    if (results.length >= 5) break
+                    const extractedUrl = this.extractUrl(link.getAttribute('href'))
+                    // Try to find context for the snippet
+                    const parent = link.parentElement
+                    const snippet = parent?.nextElementSibling?.textContent?.trim() ||
+                        parent?.parentElement?.textContent?.trim() ||
+                        'No preview available.'
+
+                    if (extractedUrl && !results.some(r => r.url === extractedUrl)) {
+                        results.push({
+                            title: link.textContent?.trim() || 'No Title',
+                            url: extractedUrl,
+                            snippet: snippet.substring(0, 150) + '...'
+                        })
+                    }
                 }
             }
 
             if (results.length === 0) {
-                // If we found blocks but no content, the structure might have changed
-                if (resultBlocks.length > 0) {
-                    return "Search engine structure has changed. Found potential results but could not parse details."
-                }
-                return "No search results found. DuckDuckGo might be presenting a different layout or a CAPTCHA."
+                return "Search engine structure has changed. Found potential results but could not parse details. Please try again later."
             }
 
             return results.map((r, i) => `Result ${i + 1}:\nTitle: ${r.title}\nURL: ${r.url}\nSnippet: ${r.snippet}`).join('\n\n')
         } catch (error) {
             return `Search Error: ${error instanceof Error ? error.message : String(error)}`
         }
+    }
+
+    private static extractUrl(rawUrl: string | null): string | null {
+        if (!rawUrl) return null
+        let url = rawUrl
+        // Handle DDG redirects
+        if (url.includes('uddg=')) {
+            try {
+                const encodedUrl = url.split('uddg=')[1].split('&')[0]
+                url = decodeURIComponent(encodedUrl)
+            } catch (e) {
+                // keep original url if decode fails
+            }
+        } else if (url.startsWith('//')) {
+            url = 'https:' + url
+        }
+        return url
     }
 }

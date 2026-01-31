@@ -34,11 +34,10 @@ export class RAGService {
      * Generates embeddings for a list of chunks using Ollama
      */
     async generateEmbeddings(chunks: KnowledgeChunk[]): Promise<KnowledgeChunk[]> {
-        if (this.settings.providerType !== 'local') {
-            // Future-proofing: Add OpenAI/Anthropic embedding support later
-            // For now, we'll focus on the user's local Ollama setup
-            return chunks
+        if (this.settings.intelligenceMode === 'cloud') {
+            return await this.generateCloudEmbeddings(chunks)
         }
+
 
         const enrichedChunks = [...chunks]
 
@@ -59,6 +58,50 @@ export class RAGService {
                 }
             } catch (error) {
                 console.error('Error generating embedding for chunk:', error)
+            }
+        }
+
+        return enrichedChunks
+    }
+
+    /**
+     * Generates embeddings using OpenAI (Cloud)
+     */
+    async generateCloudEmbeddings(chunks: KnowledgeChunk[]): Promise<KnowledgeChunk[]> {
+        if (!this.settings.apiKey) return chunks
+
+        const enrichedChunks = [...chunks]
+
+        // Process in batches of 10 to avoid rate limits/payload size issues
+        const batchSize = 10
+        for (let i = 0; i < enrichedChunks.length; i += batchSize) {
+            const batch = enrichedChunks.slice(i, i + batchSize)
+            try {
+                // Determine embedding model - prioritize text-embedding-3-small for cost/perf
+                const response = await fetch('https://api.openai.com/v1/embeddings', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.settings.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'text-embedding-3-small',
+                        input: batch.map(c => c.content)
+                    })
+                })
+
+                if (response.ok) {
+                    const data = await response.json()
+                    data.data.forEach((item: any, index: number) => {
+                        if (batch[index]) {
+                            batch[index].embedding = item.embedding
+                        }
+                    })
+                } else {
+                    console.error('OpenAI embedding error:', await response.text())
+                }
+            } catch (error) {
+                console.error('Error generating cloud embedding:', error)
             }
         }
 
@@ -90,7 +133,7 @@ export class RAGService {
             // Generate embedding for the query
             let queryEmbedding: number[] | undefined
 
-            if (this.settings.providerType === 'local') {
+            if (this.settings.intelligenceMode === 'local') {
                 const response = await fetch(`${this.settings.ollamaUrl}/api/embeddings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -103,6 +146,16 @@ export class RAGService {
                     const data = await response.json()
                     queryEmbedding = data.embedding
                 }
+            } else {
+                 // Cloud mode query embedding
+                 try {
+                    const embeddings = await this.generateCloudEmbeddings([{ content: query } as any])
+                    if (embeddings.length > 0) {
+                        queryEmbedding = embeddings[0].embedding
+                    }
+                 } catch (e) {
+                     console.error('Failed to generate cloud embedding for query', e)
+                 }
             }
 
             if (!queryEmbedding) {
