@@ -15,6 +15,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ToastManager } from '@/components/ToastManager'
+import { automationService } from '@/services/AutomationService'
 
 // Initialize PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`
@@ -28,7 +29,7 @@ function App() {
     currentView, setCurrentView, files, addFile, removeFile, addKnowledgeChunks,
     settings, updateSettings, addMessage, updateMessage,
     addConnectedApp, removeConnectedApp,
-    setAvailableModels, setOllamaInstallStatus
+    setAvailableModels, setOllamaInstallStatus, hasHydrated
   } = useStore()
 
   const [activeModal, setActiveModal] = useState<string | null>(null)
@@ -89,6 +90,13 @@ function App() {
     const colorValue = colors[settings.accentColor] || colors.cyan
     root.style.setProperty('--accent-rgb', colorValue)
   }, [settings.accentColor])
+
+  // Restore scheduled automations after hydration
+  useEffect(() => {
+    if (hasHydrated) {
+      automationService.restoreScheduledAutomations()
+    }
+  }, [hasHydrated])
 
   // AI & Model Initialization
   useEffect(() => {

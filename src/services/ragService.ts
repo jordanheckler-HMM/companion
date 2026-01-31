@@ -47,7 +47,8 @@ export class RAGService {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        model: this.settings.ollamaModel, // Using the same model for embeddings
+                        // Use dedicated embedding model (e.g., nomic-embed-text) instead of chat model
+                        model: this.settings.ollamaEmbeddingModel || 'nomic-embed-text',
                         prompt: enrichedChunks[i].content
                     })
                 })
@@ -65,10 +66,17 @@ export class RAGService {
     }
 
     /**
-     * Generates embeddings using OpenAI (Cloud)
+     * Generates embeddings using OpenAI (Cloud).
+     * Always uses OpenAI for embeddings even if main provider is Anthropic/Google,
+     * since they don't offer embedding APIs.
      */
     async generateCloudEmbeddings(chunks: KnowledgeChunk[]): Promise<KnowledgeChunk[]> {
-        if (!this.settings.apiKey) return chunks
+        // Always use OpenAI API key for embeddings (Anthropic/Google don't have embedding APIs)
+        const apiKey = this.settings.openaiApiKey || this.settings.apiKey
+        if (!apiKey) {
+            console.warn('[RAGService] No OpenAI API key available for cloud embeddings')
+            return chunks
+        }
 
         const enrichedChunks = [...chunks]
 
@@ -77,12 +85,12 @@ export class RAGService {
         for (let i = 0; i < enrichedChunks.length; i += batchSize) {
             const batch = enrichedChunks.slice(i, i + batchSize)
             try {
-                // Determine embedding model - prioritize text-embedding-3-small for cost/perf
+                // Use text-embedding-3-small for best cost/performance ratio
                 const response = await fetch('https://api.openai.com/v1/embeddings', {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.settings.apiKey}`
+                        'Authorization': `Bearer ${apiKey}`
                     },
                     body: JSON.stringify({
                         model: 'text-embedding-3-small',
@@ -138,7 +146,7 @@ export class RAGService {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        model: this.settings.ollamaModel,
+                        model: this.settings.ollamaEmbeddingModel || 'nomic-embed-text',
                         prompt: query
                     })
                 })
@@ -147,15 +155,15 @@ export class RAGService {
                     queryEmbedding = data.embedding
                 }
             } else {
-                 // Cloud mode query embedding
-                 try {
+                // Cloud mode query embedding
+                try {
                     const embeddings = await this.generateCloudEmbeddings([{ content: query } as any])
                     if (embeddings.length > 0) {
                         queryEmbedding = embeddings[0].embedding
                     }
-                 } catch (e) {
-                     console.error('Failed to generate cloud embedding for query', e)
-                 }
+                } catch (e) {
+                    console.error('Failed to generate cloud embedding for query', e)
+                }
             }
 
             if (!queryEmbedding) {

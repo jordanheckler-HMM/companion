@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { knowledgeBaseDB } from './services/IndexedDBStorage'
 
 // Message types
 export interface Message {
@@ -48,6 +49,7 @@ export interface AISettings {
   // Local (Ollama) settings
   ollamaUrl: string
   ollamaModel: string // Deprecated, kept for migration
+  ollamaEmbeddingModel?: string // Dedicated embedding model (e.g., nomic-embed-text)
   // Cloud API settings
   cloudProvider: 'openai' | 'anthropic' | 'google'
   apiKey: string // Deprecated, kept for migration
@@ -112,6 +114,11 @@ export interface PipelineStep {
 
   // Wait config
   waitDuration?: number   // milliseconds
+
+  // Condition config
+  conditionVariable?: string   // Variable to check (e.g., "{{result}}")
+  conditionOperator?: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'is_empty' | 'is_not_empty'
+  conditionValue?: string      // Value to compare against (for equals/contains operators)
 
   // Integration Action config
   integrationId?: string      // e.g., 'notion', 'github'
@@ -182,10 +189,13 @@ interface AppState {
   addConnectedApp: (app: string) => void
   removeConnectedApp: (app: string) => void
 
-  // Knowledge Base (RAG)
+  // Knowledge Base (RAG) - stored in IndexedDB, not localStorage
   knowledgeBase: KnowledgeChunk[]
-  addKnowledgeChunks: (chunks: KnowledgeChunk[]) => void
-  clearKnowledgeBase: () => void
+  knowledgeBaseLoaded: boolean
+  loadKnowledgeBase: () => Promise<void>
+  addKnowledgeChunks: (chunks: KnowledgeChunk[]) => Promise<void>
+  removeKnowledgeChunksByFileId: (fileId: string) => Promise<void>
+  clearKnowledgeBase: () => Promise<void>
   knowledgeBaseStorageWarning: string | null
   setKnowledgeBaseStorageWarning: (warning: string | null) => void
 
@@ -381,6 +391,7 @@ export const useStore = create<AppState>()(
           preferredModelId: 'llama2',
           ollamaUrl: 'http://localhost:11434',
           ollamaModel: 'llama2',
+          ollamaEmbeddingModel: 'nomic-embed-text', // Best embedding model for Ollama
           cloudProvider: 'openai',
           apiKey: '',
           cloudModel: 'gpt-4',
@@ -440,30 +451,51 @@ export const useStore = create<AppState>()(
           connectedApps: state.connectedApps.filter((a) => a !== app),
         })),
 
-      // Knowledge Base
+      // Knowledge Base (stored in IndexedDB, not localStorage)
       knowledgeBase: [],
-      addKnowledgeChunks: (chunks) =>
-        set((state) => {
-          const newKb = [...state.knowledgeBase, ...chunks]
-
-          // Safety check for LocalStorage limit (approx 5MB)
-          // We assume ~8000 tokens per chunk approx 32kb? No, embeddings are float[1536] = 6kb each.
-          // 1000 chunks = 6MB. 
-          const estimatedSize = JSON.stringify(newKb).length
-          const limit = 4.5 * 1024 * 1024 // 4.5MB soft limit
-
-          let warning = null
-          if (estimatedSize > limit) {
-            console.warn('Knowledge Base size exceeds safe LocalStorage limits', estimatedSize)
-            warning = 'Knowledge Base is too large for local storage. Some data may not persist.'
-          }
-
-          return {
-            knowledgeBase: newKb,
-            knowledgeBaseStorageWarning: warning
-          }
-        }),
-      clearKnowledgeBase: () => set({ knowledgeBase: [], knowledgeBaseStorageWarning: null }),
+      knowledgeBaseLoaded: false,
+      loadKnowledgeBase: async () => {
+        try {
+          const chunks = await knowledgeBaseDB.getChunks()
+          set({ knowledgeBase: chunks, knowledgeBaseLoaded: true })
+          console.log(`[Store] Loaded ${chunks.length} knowledge chunks from IndexedDB`)
+        } catch (error) {
+          console.error('[Store] Failed to load knowledge base:', error)
+          set({ knowledgeBaseLoaded: true }) // Mark as loaded even on error
+        }
+      },
+      addKnowledgeChunks: async (chunks) => {
+        try {
+          await knowledgeBaseDB.addChunks(chunks)
+          set((state) => ({
+            knowledgeBase: [...state.knowledgeBase, ...chunks]
+          }))
+          console.log(`[Store] Added ${chunks.length} knowledge chunks to IndexedDB`)
+        } catch (error) {
+          console.error('[Store] Failed to add knowledge chunks:', error)
+          set({ knowledgeBaseStorageWarning: 'Failed to save knowledge base.' })
+        }
+      },
+      removeKnowledgeChunksByFileId: async (fileId) => {
+        try {
+          await knowledgeBaseDB.removeChunksByFileId(fileId)
+          set((state) => ({
+            knowledgeBase: state.knowledgeBase.filter(c => c.fileId !== fileId)
+          }))
+          console.log(`[Store] Removed chunks for file ${fileId}`)
+        } catch (error) {
+          console.error('[Store] Failed to remove knowledge chunks:', error)
+        }
+      },
+      clearKnowledgeBase: async () => {
+        try {
+          await knowledgeBaseDB.clear()
+          set({ knowledgeBase: [], knowledgeBaseStorageWarning: null })
+          console.log('[Store] Cleared knowledge base')
+        } catch (error) {
+          console.error('[Store] Failed to clear knowledge base:', error)
+        }
+      },
       knowledgeBaseStorageWarning: null,
       setKnowledgeBaseStorageWarning: (warning) => set({ knowledgeBaseStorageWarning: warning }),
 
@@ -562,7 +594,7 @@ export const useStore = create<AppState>()(
         connectedApps: state.connectedApps,
         files: state.files,
         messages: state.messages,
-        knowledgeBase: state.knowledgeBase,
+        // NOTE: knowledgeBase is now stored in IndexedDB, not localStorage
         agents: state.agents,
         automations: state.automations,
         vaultPath: state.vaultPath,
@@ -621,6 +653,21 @@ export const useStore = create<AppState>()(
             if (needsUpdate) {
               state.updateSettings(updates)
             }
+          }
+
+          // Migrate knowledge base from localStorage to IndexedDB if present
+          if (persistedState?.knowledgeBase && persistedState.knowledgeBase.length > 0) {
+            console.log(`[Store] Migrating ${persistedState.knowledgeBase.length} knowledge chunks from localStorage to IndexedDB...`)
+            knowledgeBaseDB.migrateFromLocalStorage(persistedState.knowledgeBase).then(() => {
+              // After migration, load from IndexedDB
+              state.loadKnowledgeBase()
+            }).catch(err => {
+              console.error('[Store] Knowledge base migration failed:', err)
+              state.loadKnowledgeBase() // Still try to load
+            })
+          } else {
+            // No localStorage data - just load from IndexedDB
+            state.loadKnowledgeBase()
           }
 
           state.setHasHydrated(true)

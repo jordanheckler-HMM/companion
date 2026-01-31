@@ -13,6 +13,7 @@ export function SettingsPanel() {
     const [testing, setTesting] = useState(false)
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
     const [availableModels, setAvailableModels] = useState<string[]>([])
+    const [showAdvanced, setShowAdvanced] = useState(false)
 
     // Fetch models for the default selector
     useEffect(() => {
@@ -182,25 +183,39 @@ export function SettingsPanel() {
                     {/* AI ASSISTANT SECTION */}
                     <SettingsSection title="AI Assistant" defaultOpen={false}>
                         <div className="space-y-5 bg-foreground/5 p-5 rounded-2xl border border-foreground/5">
-                            <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Assistant Identity</label>
-                                <input
-                                    type="text"
-                                    className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20 shadow-sm"
-                                    placeholder="Companion"
-                                    value={settings.assistantName}
-                                    onChange={(e) => updateSettings({ assistantName: e.target.value })}
-                                />
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Assistant Identity</label>
+                                    <input
+                                        type="text"
+                                        className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20 shadow-sm"
+                                        placeholder="Companion"
+                                        value={settings.assistantName}
+                                        onChange={(e) => updateSettings({ assistantName: e.target.value })}
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/40">Advanced Mode</span>
+                                    <button
+                                        onClick={() => setShowAdvanced(!showAdvanced)}
+                                        className={`w-8 h-4 rounded-full relative transition-all duration-300 ${showAdvanced ? 'bg-primary-accent' : 'bg-foreground/10'}`}
+                                    >
+                                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all duration-300 ${showAdvanced ? 'left-4.5' : 'left-0.5'}`} />
+                                    </button>
+                                </div>
                             </div>
-                            <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Core Instructions (System Prompt)</label>
-                                <textarea
-                                    className="glass-strong w-full px-4 py-4 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20 min-h-[140px] resize-none shadow-sm"
-                                    placeholder="You are a helpful AI assistant..."
-                                    value={settings.systemPrompt}
-                                    onChange={(e) => updateSettings({ systemPrompt: e.target.value })}
-                                />
-                            </div>
+
+                            {showAdvanced && (
+                                <div className="space-y-4 pt-4 border-t border-white/5 animate-in fade-in slide-in-from-top-2">
+                                    <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Core Instructions (System Prompt)</label>
+                                    <textarea
+                                        className="glass-strong w-full px-4 py-4 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20 min-h-[140px] resize-none shadow-sm"
+                                        placeholder="You are a helpful AI assistant..."
+                                        value={settings.systemPrompt}
+                                        onChange={(e) => updateSettings({ systemPrompt: e.target.value })}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </SettingsSection>
 
@@ -227,23 +242,25 @@ export function SettingsPanel() {
 
                             {settings.aiSettings.intelligenceMode === 'local' && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                    <div>
-                                        <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Ollama Endpoint URL</label>
-                                        <input
-                                            type="text"
-                                            className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20"
-                                            placeholder="http://localhost:11434"
-                                            value={settings.aiSettings.ollamaUrl}
-                                            onChange={(e) =>
-                                                updateSettings({
-                                                    aiSettings: { ...settings.aiSettings, ollamaUrl: e.target.value },
-                                                })
-                                            }
-                                        />
-                                    </div>
+                                    {showAdvanced && (
+                                        <div>
+                                            <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Ollama Endpoint URL</label>
+                                            <input
+                                                type="text"
+                                                className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20"
+                                                placeholder="http://localhost:11434"
+                                                value={settings.aiSettings.ollamaUrl}
+                                                onChange={(e) =>
+                                                    updateSettings({
+                                                        aiSettings: { ...settings.aiSettings, ollamaUrl: e.target.value },
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                    )}
                                     <div>
                                         <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block flex items-center gap-1.5">
-                                            Default Model
+                                            Default Chat Model
                                             <Sparkles className="h-3 w-3" style={{ color: 'rgb(var(--accent-rgb))' }} />
                                         </label>
                                         <div className="relative">
@@ -254,7 +271,6 @@ export function SettingsPanel() {
                                                     updateSettings({
                                                         aiSettings: {
                                                             ...settings.aiSettings,
-                                                            // Update preferredModelId directly
                                                             preferredModelId: e.target.value
                                                         },
                                                     })
@@ -273,6 +289,42 @@ export function SettingsPanel() {
                                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50 pointer-events-none" />
                                         </div>
                                     </div>
+                                    {showAdvanced && (
+                                        <div>
+                                            <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block flex items-center gap-1.5">
+                                                Embedding Model
+                                                <Sparkles className="h-3 w-3" style={{ color: 'rgb(var(--accent-rgb))' }} />
+                                            </label>
+                                            <div className="relative">
+                                                <select
+                                                    className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm appearance-none outline-none focus:ring-1 focus:ring-foreground/20 cursor-pointer"
+                                                    value={settings.aiSettings.ollamaEmbeddingModel || 'nomic-embed-text'}
+                                                    onChange={(e) =>
+                                                        updateSettings({
+                                                            aiSettings: {
+                                                                ...settings.aiSettings,
+                                                                ollamaEmbeddingModel: e.target.value
+                                                            },
+                                                        })
+                                                    }
+                                                >
+                                                    {availableModels.length > 0 ? (
+                                                        availableModels.map((model) => (
+                                                            <option key={model} value={model} className="bg-background">
+                                                                {model}
+                                                            </option>
+                                                        ))
+                                                    ) : (
+                                                        <option value="nomic-embed-text">nomic-embed-text (default)</option>
+                                                    )}
+                                                </select>
+                                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50 pointer-events-none" />
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground mt-1.5 opacity-60">
+                                                Used for Knowledge Base searching. <code className="bg-foreground/5 px-1 rounded">nomic-embed-text</code> recommended.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

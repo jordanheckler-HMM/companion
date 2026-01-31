@@ -49,7 +49,9 @@ class SchedulerService {
     }
 
     /**
-     * Schedule recurring execution
+     * Schedule recurring execution using chained setTimeout (not setInterval).
+     * This recalculates the exact next run time after each execution,
+     * properly handling DST changes and avoiding drift.
      */
     private scheduleRecurring(
         automationId: string,
@@ -58,25 +60,21 @@ class SchedulerService {
     ): void {
         if (!trigger.scheduleConfig) return
 
-        const { frequency } = trigger.scheduleConfig
-        let interval: number
+        // Calculate the actual next run time based on the schedule
+        const now = new Date()
+        const nextRun = this.getNextRunTime(trigger, now)
+        const delay = nextRun.getTime() - now.getTime()
 
-        switch (frequency) {
-            case 'hourly':
-                interval = 60 * 60 * 1000 // 1 hour
-                break
-            case 'daily':
-                interval = 24 * 60 * 60 * 1000 // 24 hours
-                break
-            case 'weekly':
-                interval = 7 * 24 * 60 * 60 * 1000 // 7 days
-                break
-            default:
-                return
-        }
+        // Handle edge case where delay could be 0 or negative
+        const safeDelay = Math.max(delay, 1000)
 
-        const timerId = window.setInterval(callback, interval)
-        const nextRun = new Date(Date.now() + interval)
+        const timerId = window.setTimeout(() => {
+            // Execute the callback
+            callback()
+
+            // Chain to the next occurrence (recalculate fresh)
+            this.scheduleRecurring(automationId, trigger, callback)
+        }, safeDelay)
 
         this.jobs.set(automationId, {
             automationId,
@@ -146,9 +144,56 @@ class SchedulerService {
                 break
 
             case 'custom':
-                // For custom cron expressions, default to next day
-                // (Full cron parsing would require a library like node-cron)
-                next.setDate(next.getDate() + 1)
+                // Basic cron expression parsing (common patterns only)
+                // Format: minute hour day-of-month month day-of-week
+                // Supports: "0 9 * * *" (daily at 9am), "0 * * * *" (every hour), etc.
+                if (trigger.scheduleConfig?.cronExpression) {
+                    const parts = trigger.scheduleConfig.cronExpression.trim().split(/\s+/)
+                    if (parts.length >= 5) {
+                        const [cronMin, cronHour, _cronDom, _cronMonth, cronDow] = parts
+
+                        // Parse minute and hour (handle '*' as current or next)
+                        const targetMin = cronMin === '*' ? 0 : parseInt(cronMin) || 0
+                        const targetHour = cronHour === '*' ? -1 : parseInt(cronHour)
+
+                        if (targetHour === -1) {
+                            // Every hour: schedule for next hour at specified minute
+                            next.setMinutes(targetMin, 0, 0)
+                            if (next <= from) {
+                                next.setHours(next.getHours() + 1)
+                            }
+                        } else {
+                            // Specific hour: schedule for that time
+                            next.setHours(targetHour, targetMin, 0, 0)
+                            if (next <= from) {
+                                // Check for day-of-week constraint
+                                if (cronDow !== '*') {
+                                    const targetDay = parseInt(cronDow)
+                                    const currentDay = next.getDay()
+                                    let daysUntil = targetDay - currentDay
+                                    if (daysUntil <= 0) daysUntil += 7
+                                    next.setDate(next.getDate() + daysUntil)
+                                } else {
+                                    // Just move to tomorrow
+                                    next.setDate(next.getDate() + 1)
+                                }
+                            }
+                        }
+                    } else {
+                        // Invalid cron format, fallback to daily at 9am
+                        console.warn('[SchedulerService] Invalid cron expression, falling back to daily at 9am')
+                        next.setHours(9, 0, 0, 0)
+                        if (next <= from) {
+                            next.setDate(next.getDate() + 1)
+                        }
+                    }
+                } else {
+                    // No cron expression provided, fallback to daily at 9am
+                    next.setHours(9, 0, 0, 0)
+                    if (next <= from) {
+                        next.setDate(next.getDate() + 1)
+                    }
+                }
                 break
         }
 

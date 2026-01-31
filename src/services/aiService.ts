@@ -118,10 +118,25 @@ The editor will open with this content pre-loaded. The user can then edit, save,
 
                 for (const toolCall of toolCalls) {
                     const result = await ToolService.executeTool(toolCall.name, toolCall.arguments)
-                    currentMessages.push({
-                        role: 'system',
-                        content: `Tool Result [${result.tool}]: ${result.result}`
-                    })
+
+                    // Format tool result as a message
+                    // Use 'user' role with a clear prefix for Anthropic compatibility
+                    // (Anthropic handles system messages differently than OpenAI)
+                    const toolResultContent = `[Tool Result - ${result.tool}]:\n${result.result}`
+
+                    if (this.settings.cloudProvider === 'anthropic' && this.settings.intelligenceMode === 'cloud') {
+                        // Anthropic: use user role with structured prefix
+                        currentMessages.push({
+                            role: 'user',
+                            content: toolResultContent
+                        })
+                    } else {
+                        // OpenAI/Ollama: system role works well
+                        currentMessages.push({
+                            role: 'system',
+                            content: toolResultContent
+                        })
+                    }
                 }
 
                 maxIterations--
@@ -184,25 +199,113 @@ The editor will open with this content pre-loaded. The user can then edit, save,
     }
 
     /**
+     * Attempt to repair common JSON formatting issues from AI output
+     */
+    private repairJSON(jsonString: string): string {
+        let repaired = jsonString.trim()
+
+        // Remove trailing commas before } or ]
+        repaired = repaired.replace(/,\s*([}\]])/g, '$1')
+
+        // Try to fix unquoted keys (simple cases)
+        repaired = repaired.replace(/(\{|,)\s*(\w+)\s*:/g, '$1"$2":')
+
+        // Fix single quotes to double quotes
+        repaired = repaired.replace(/'/g, '"')
+
+        return repaired
+    }
+
+    /**
      * Extract tool calls from AI response. 
-     * Supports both native tool calls (if any) and a fallback text pattern: 
-     * [TOOL:name]{"arg": "val"}[/TOOL]
+     * Supports multiple patterns for robustness:
+     * 1. Standard: [TOOL:name]{"arg": "val"}[/TOOL]
+     * 2. Whitespace tolerant: [ TOOL : name ] {...} [ / TOOL ]
+     * 3. Markdown code blocks: ```tool:name {...} ```
+     * 4. XML-style: <tool name="name">...</tool>
      */
     private extractToolCalls(content: string): { name: string, arguments: any }[] {
         const tools: { name: string, arguments: any }[] = []
+        const parseErrors: string[] = []
 
-        // Pattern: [TOOL:name]{...}[/TOOL]
-        const toolRegex = /\[TOOL:(\w+)\]([\s\S]*?)\[\/TOOL\]/g
+        // Pattern 1: Standard format with whitespace tolerance
+        // Allows: [TOOL:name], [ TOOL:name ], [TOOL: name], etc.
+        const toolRegex = /\[\s*TOOL\s*:\s*(\w+)\s*\]\s*([\s\S]*?)\s*\[\s*\/\s*TOOL\s*\]/gi
         let match
 
         while ((match = toolRegex.exec(content)) !== null) {
+            const name = match[1]
+            const rawArgs = match[2].trim()
+
             try {
-                const name = match[1]
-                const args = JSON.parse(match[2].trim())
+                const args = JSON.parse(rawArgs)
                 tools.push({ name, arguments: args })
             } catch (e) {
-                console.error('Failed to parse tool arguments:', e)
+                // Try to repair JSON
+                try {
+                    const repairedArgs = this.repairJSON(rawArgs)
+                    const args = JSON.parse(repairedArgs)
+                    tools.push({ name, arguments: args })
+                    console.warn(`[AIService] Repaired malformed JSON for tool ${name}`)
+                } catch (e2) {
+                    parseErrors.push(`Tool "${name}": ${rawArgs.substring(0, 100)}...`)
+                }
             }
+        }
+
+        // Pattern 2: Markdown code block format (fallback)
+        // Matches: ```tool:name {...} ``` or ```json tool:name {...} ```
+        if (tools.length === 0) {
+            const codeBlockRegex = /```(?:json\s+)?tool[:\s]+(\w+)\s*([\s\S]*?)```/gi
+            while ((match = codeBlockRegex.exec(content)) !== null) {
+                const name = match[1]
+                const rawArgs = match[2].trim()
+
+                try {
+                    const args = JSON.parse(rawArgs)
+                    tools.push({ name, arguments: args })
+                } catch (e) {
+                    try {
+                        const args = JSON.parse(this.repairJSON(rawArgs))
+                        tools.push({ name, arguments: args })
+                    } catch (e2) {
+                        parseErrors.push(`CodeBlock tool "${name}": parse failed`)
+                    }
+                }
+            }
+        }
+
+        // Pattern 3: XML-style format (fallback)
+        // Matches: <tool name="toolname">{"args": "val"}</tool>
+        if (tools.length === 0) {
+            const xmlRegex = /<tool\s+name\s*=\s*["'](\w+)["']\s*>([\s\S]*?)<\/tool>/gi
+            while ((match = xmlRegex.exec(content)) !== null) {
+                const name = match[1]
+                const rawArgs = match[2].trim()
+
+                try {
+                    const args = JSON.parse(rawArgs)
+                    tools.push({ name, arguments: args })
+                } catch (e) {
+                    try {
+                        const args = JSON.parse(this.repairJSON(rawArgs))
+                        tools.push({ name, arguments: args })
+                    } catch (e2) {
+                        parseErrors.push(`XML tool "${name}": parse failed`)
+                    }
+                }
+            }
+        }
+
+        // Log any parse errors for debugging
+        if (parseErrors.length > 0) {
+            console.error('[AIService] Tool parsing errors:', parseErrors)
+            ErrorLogger.log(
+                `Failed to parse ${parseErrors.length} tool call(s)`,
+                ErrorSeverity.WARNING,
+                'AIService.extractToolCalls',
+                { errors: parseErrors }
+            )
         }
 
         return tools

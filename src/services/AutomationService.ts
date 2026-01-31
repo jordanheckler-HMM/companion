@@ -36,6 +36,32 @@ class AutomationService {
     }
 
     /**
+     * Restore all active scheduled automations after app restart.
+     * Call this after store hydration.
+     */
+    restoreScheduledAutomations(): void {
+        const automations = useStore.getState().automations
+        const activeScheduled = automations.filter(
+            a => a.isActive && a.trigger.type === 'schedule'
+        )
+
+        if (activeScheduled.length === 0) {
+            console.log('[AutomationService] No scheduled automations to restore')
+            return
+        }
+
+        for (const automation of activeScheduled) {
+            schedulerService.scheduleJob(
+                automation.id,
+                automation.trigger,
+                () => this.runNow(automation.id)
+            )
+        }
+
+        console.log(`[AutomationService] Restored ${activeScheduled.length} scheduled automation(s)`)
+    }
+
+    /**
      * Stop an automation (deactivate trigger)
      */
     stopAutomation(automationId: string): void {
@@ -135,8 +161,11 @@ class AutomationService {
                 break
 
             case 'condition':
-                // Future: implement conditional logic
-                context.logs.push(`[SKIP] Conditional steps not yet implemented`)
+                const shouldContinue = this.executeCondition(step, context)
+                if (!shouldContinue) {
+                    context.logs.push(`[CONDITION] Condition failed, skipping remaining steps`)
+                    throw new Error('CONDITION_FAILED') // Will be caught specially
+                }
                 break
 
             default:
@@ -314,6 +343,51 @@ class AutomationService {
         const duration = step.waitDuration || 1000
         context.logs.push(`[WAIT] Pausing for ${duration}ms`)
         await new Promise(resolve => setTimeout(resolve, duration))
+    }
+
+    /**
+     * Evaluate a condition step
+     * Returns true if condition passes, false otherwise
+     */
+    private executeCondition(
+        step: PipelineStep,
+        context: PipelineContext
+    ): boolean {
+        const variable = step.conditionVariable || ''
+        const operator = step.conditionOperator || 'is_not_empty'
+        const expectedValue = step.conditionValue || ''
+
+        // Resolve the variable to get the actual value
+        const actualValue = this.resolveVariables(variable, context.variables)
+
+        let result = false
+
+        switch (operator) {
+            case 'equals':
+                result = actualValue === expectedValue
+                break
+            case 'not_equals':
+                result = actualValue !== expectedValue
+                break
+            case 'contains':
+                result = actualValue.includes(expectedValue)
+                break
+            case 'not_contains':
+                result = !actualValue.includes(expectedValue)
+                break
+            case 'is_empty':
+                result = actualValue.trim() === ''
+                break
+            case 'is_not_empty':
+                result = actualValue.trim() !== ''
+                break
+            default:
+                console.warn(`[AutomationService] Unknown condition operator: ${operator}`)
+                result = true // Default to true for unknown operators
+        }
+
+        context.logs.push(`[CONDITION] ${variable} ${operator} "${expectedValue}" = ${result}`)
+        return result
     }
 
     /**
