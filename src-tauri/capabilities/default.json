@@ -14,6 +14,7 @@
     "fs:default",
     "http:default",
     "shell:default",
+    "notification:default",
     "fs:read-all",
     "fs:write-all",
     {

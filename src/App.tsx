@@ -5,7 +5,12 @@ import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import { GitHubDashboard } from '@/components/dashboard/GitHubDashboard'
 import { CalendarDashboard } from '@/components/dashboard/CalendarDashboard'
 import { NotionDashboard } from '@/components/dashboard/NotionDashboard'
+import { SupabaseDashboard } from '@/components/dashboard/SupabaseDashboard'
 import { AgentLab } from '@/components/agents/AgentLab'
+import { AgentStoreView } from '@/components/agents/AgentStoreView'
+import { TeamWorkspace } from '@/components/teams/TeamWorkspace'
+import { SupabaseService } from '@/services/SupabaseService'
+
 
 import { useEffect, useState } from 'react'
 import { useStore } from '@/store'
@@ -143,7 +148,15 @@ function App() {
     }
 
     initializeModels()
+    initializeModels()
+
+    // Initialize Supabase
+    const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env
+    if (VITE_SUPABASE_URL && VITE_SUPABASE_ANON_KEY) {
+      SupabaseService.initialize(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+    }
   }, [settings.aiSettings.ollamaUrl])
+
 
   const handleFileAction = (fileId: string, action: string) => {
     if (action === 'delete') {
@@ -169,7 +182,11 @@ function App() {
         <ErrorBoundary>
           {currentView === 'home' && <ChatWindow />}
           {currentView === 'agents' && <AgentLab />}
+          {currentView === 'store' && <AgentStoreView />}
+          {currentView === 'teams' && <TeamWorkspace />}
+          {currentView === 'supabase' && <SupabaseDashboard />}
           {currentView === 'files' && (
+
             // ... existing files content ...
             <div className="h-full overflow-y-auto">
               <div className="glass-light border-b border-white/10 px-6 py-4 sticky top-0 z-10">
@@ -332,6 +349,54 @@ function App() {
                     ) : (
                       <button
                         onClick={() => { setActiveModal('github'); setApiKeyInput('') }}
+                        className="glass-strong hover:bg-white/10 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
+                      >
+                        Connect
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Supabase */}
+                  <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
+                    <div className="text-4xl mb-3">⚡</div>
+                    <h3 className="font-semibold mb-2">Supabase</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Connect your database
+                    </p>
+                    {settings.aiSettings.toolsEnabled?.supabase?.enabled && settings.aiSettings.toolsEnabled?.supabase?.supabaseUrl ? (
+                      <button
+                        onClick={() => {
+                          const currentTools = settings.aiSettings.toolsEnabled || {
+                            web_search: true,
+                            url_reader: true,
+                            file_system: true,
+                            execute_code: true,
+                            google_calendar: false,
+                            notion: false,
+                            github: false
+                          }
+                          updateSettings({
+                            aiSettings: {
+                              ...settings.aiSettings,
+                              toolsEnabled: {
+                                ...currentTools,
+                                supabase: {
+                                  enabled: false,
+                                  supabaseUrl: '',
+                                  supabaseKey: ''
+                                }
+                              }
+                            }
+                          })
+                          removeConnectedApp('Supabase')
+                        }}
+                        className="glass-strong bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
+                      >
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setCurrentView('supabase')}
                         className="glass-strong hover:bg-white/10 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
                       >
                         Connect

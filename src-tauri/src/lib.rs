@@ -1,11 +1,12 @@
+use tauri::Manager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton};
+use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .setup(|app| {
-      use tauri::Manager;
-      use tauri::menu::{Menu, MenuItem};
-      use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton};
-      use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
       let main_window = app.get_webview_window("main").unwrap();
       let panel_window = app.get_webview_window("panel").unwrap();
@@ -17,6 +18,15 @@ pub fn run() {
         
         apply_vibrancy(&panel_window, NSVisualEffectMaterial::HudWindow, None, None)
           .expect("Unsupported platform! 'apply_vibrancy' is only supported on macOS");
+
+        // Prevent main window from closing on macOS
+        let main_window_clone = main_window.clone();
+        main_window.on_window_event(move |event| {
+          if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = main_window_clone.hide();
+          }
+        });
       }
 
       let tray_icon = if let Ok(icon_image) = image::load_from_memory(include_bytes!("../icons/tray-icon.png")) {
@@ -27,18 +37,6 @@ pub fn run() {
       } else {
         None
       };
-
-      // Remove the auto-hide logic to allow the window to be movable/persistent
-      /*
-      let panel_handle = panel_window.clone();
-      panel_window.on_window_event(move |event| {
-          if let tauri::WindowEvent::Focused(focused) = event {
-              if !*focused {
-                  let _ = panel_handle.hide();
-              }
-          }
-      });
-      */
 
       // Create Tray Menu
       let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -55,9 +53,11 @@ pub fn run() {
               app.exit(0);
             }
             "show" => {
-              let window = app.get_webview_window("main").unwrap();
-              let _ = window.show();
-              let _ = window.set_focus();
+              if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+              }
             }
             _ => {}
           }
@@ -70,9 +70,8 @@ pub fn run() {
                         let _ = window.hide();
                     } else {
                         // Basic positioning - on macOS tray is at the top
-                        // We align it to the click x coordinate
                         let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { 
-                            x: (position.x - 190.0) as i32, // roughly half the window width
+                            x: (position.x - 190.0) as i32,
                             y: 0 
                         }));
                         let _ = window.show();
@@ -88,8 +87,20 @@ pub fn run() {
       app.handle().plugin(tauri_plugin_dialog::init())?;
       app.handle().plugin(tauri_plugin_http::init())?;
       app.handle().plugin(tauri_plugin_shell::init())?;
+      app.handle().plugin(tauri_plugin_notification::init())?;
       Ok(())
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|app_handle, event| match event {
+      #[cfg(target_os = "macos")]
+      tauri::RunEvent::Reopen { .. } => {
+        if let Some(window) = app_handle.get_webview_window("main") {
+          let _ = window.show();
+          let _ = window.unminimize();
+          let _ = window.set_focus();
+        }
+      }
+      _ => {}
+    });
 }

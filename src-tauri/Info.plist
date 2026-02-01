@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Companion needs access to your microphone for voice input. Your voice is processed locally or sent to your configured AI service for transcription.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Companion uses speech recognition to convert your voice to text for AI interactions.</string>
+</dict>
+</plist>

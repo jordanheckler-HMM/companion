@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { Session } from '@supabase/supabase-js'
 import { knowledgeBaseDB } from './services/IndexedDBStorage'
+
 
 // Message types
 export interface Message {
@@ -12,6 +14,13 @@ export interface Message {
   modelId?: string
   modelLabel?: string
 }
+
+export interface SupabaseConfig {
+  url: string
+  key: string
+  enabled: boolean
+}
+
 
 // File types
 export interface FileItem {
@@ -34,7 +43,7 @@ export interface KnowledgeChunk {
 // Pending context from integrations (staged before sending)
 export interface PendingContext {
   id: string
-  type: 'github_repo' | 'notion_page' | 'calendar_event' | 'ai_prompt'
+  type: 'github_repo' | 'notion_page' | 'calendar_event' | 'ai_prompt' | 'supabase_table'
   title: string
   description?: string
   prompt?: string  // For ai_prompt type, the actual query to send
@@ -52,6 +61,8 @@ export interface AISettings {
   ollamaEmbeddingModel?: string // Dedicated embedding model (e.g., nomic-embed-text)
   // Cloud API settings
   cloudProvider: 'openai' | 'anthropic' | 'google'
+  cloudSyncEnabled: boolean
+  enableVaultRAG: boolean
   apiKey: string // Deprecated, kept for migration
   openaiApiKey?: string
   anthropicApiKey?: string
@@ -66,11 +77,28 @@ export interface AISettings {
     google_calendar: boolean
     notion: boolean
     github: boolean
+    supabase?: {
+      enabled: boolean
+      supabaseUrl: string
+      supabaseKey: string
+    }
   }
   // Integration Keys
   googleCalendarApiKey?: string
   notionApiKey?: string
   githubApiKey?: string
+}
+
+// Voice & Audio Settings
+export interface VoiceSettings {
+  enabled: boolean
+  sttEngine: 'local' | 'cloud'      // Speech-to-Text engine
+  ttsEngine: 'local' | 'cloud'      // Text-to-Speech engine
+  cloudVoice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'
+  localVoice: string                 // macOS voice identifier
+  speakingRate: number               // 0.5 - 2.0
+  autoListen: boolean                // Auto-reactivate mic after AI speaks
+  speakResponses: boolean            // Whether AI should speak its responses aloud
 }
 
 // Settings types
@@ -83,6 +111,7 @@ export interface Settings {
   accentTintStrength: number
   glassBlur: number
   aiSettings: AISettings
+  voiceSettings: VoiceSettings
 }
 
 // Agent Automation Types
@@ -214,6 +243,12 @@ interface AppState {
   // Hydration
   hasHydrated: boolean
   setHasHydrated: (state: boolean) => void
+  showSettings: boolean
+  setShowSettings: (show: boolean) => void
+
+  // Supabase State
+  supabaseSession: Session | null
+  setSupabaseSession: (session: Session | null) => void
 
   // Agent Automations State
   agents: AgentBlueprint[]
@@ -332,10 +367,10 @@ export const useStore = create<AppState>()(
         }))
         return id
       },
-      updateMessage: (id, content, status, modelId, modelLabel) =>
+      updateMessage: (id, content, status, modelId) =>
         set((state) => ({
           messages: state.messages.map((m) =>
-            m.id === id ? { ...m, content, ...(status ? { status } : {}), ...(modelId ? { modelId } : {}), ...(modelLabel ? { modelLabel } : {}) } : m
+            m.id === id ? { ...m, content, ...(status ? { status } : {}), ...(modelId ? { modelId } : {}) } : m
           ),
         })),
       clearMessages: () =>
@@ -393,6 +428,8 @@ export const useStore = create<AppState>()(
           ollamaModel: 'llama2',
           ollamaEmbeddingModel: 'nomic-embed-text', // Best embedding model for Ollama
           cloudProvider: 'openai',
+          cloudSyncEnabled: false,
+          enableVaultRAG: false,
           apiKey: '',
           cloudModel: 'gpt-4',
           toolsEnabled: {
@@ -409,6 +446,16 @@ export const useStore = create<AppState>()(
           notionApiKey: '',
           githubApiKey: '',
           googleApiKey: '',
+        },
+        voiceSettings: {
+          enabled: false,
+          sttEngine: 'local',
+          ttsEngine: 'local',
+          cloudVoice: 'alloy',
+          localVoice: 'Samantha', // Default macOS voice
+          speakingRate: 1.0,
+          autoListen: false,
+          speakResponses: false,
         },
       },
       updateSettings: (updates) =>
@@ -519,7 +566,13 @@ export const useStore = create<AppState>()(
 
       // Hydration
       hasHydrated: false,
-      setHasHydrated: (state: boolean) => set({ hasHydrated: state }),
+      setHasHydrated: (state) => set({ hasHydrated: state }),
+      showSettings: false,
+      setShowSettings: (show) => set({ showSettings: show }),
+
+      // Supabase State
+      supabaseSession: null,
+      setSupabaseSession: (session) => set({ supabaseSession: session }),
 
       // Agent Automations Implementation
       agents: [],

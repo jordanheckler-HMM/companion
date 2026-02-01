@@ -1,9 +1,13 @@
 import { useState } from 'react'
-import { Home, FileText, Puzzle, Settings, ChevronLeft, ChevronRight, Calendar, Github, Database, Bot } from 'lucide-react'
+import { Home, FileText, Puzzle, Settings, ChevronLeft, ChevronRight, Calendar, Github, Database, Bot, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store'
 import logo from '@/assets/logo.png'
+import { UserProfile } from '@/components/auth/UserProfile'
+import { LayoutGrid } from 'lucide-react'
+
+
 
 interface NavItemProps {
   icon: React.ElementType
@@ -45,8 +49,10 @@ interface SidebarProps {
 const APP_CONFIG: Record<string, { icon: any, label: string, view: string }> = {
   'Google Calendar': { icon: Calendar, label: 'Google Calendar', view: 'calendar' },
   'Notion': { icon: Database, label: 'Notion', view: 'notion' },
-  'GitHub': { icon: Github, label: 'GitHub', view: 'github' }
+  'GitHub': { icon: Github, label: 'GitHub', view: 'github' },
+  'Supabase': { icon: Database, label: 'Supabase', view: 'supabase' }
 }
+
 
 export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
@@ -55,8 +61,10 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
   const connectedApps = [
     settings.aiSettings.googleCalendarApiKey ? 'Google Calendar' : null,
     settings.aiSettings.notionApiKey ? 'Notion' : null,
-    settings.aiSettings.githubApiKey ? 'GitHub' : null
+    settings.aiSettings.githubApiKey ? 'GitHub' : null,
+    settings.aiSettings.toolsEnabled?.supabase?.enabled ? 'Supabase' : null
   ].filter(Boolean) as string[]
+
 
   return (
     <aside
@@ -128,6 +136,24 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
           active={currentView === 'integrations'}
           onClick={() => onViewChange?.('integrations')}
         />
+        <NavItem
+          icon={Users}
+          label="Teams"
+          collapsed={collapsed}
+          active={currentView === 'teams'}
+          onClick={() => onViewChange?.('teams')}
+        />
+
+        <div className="h-px bg-white/10 my-2" />
+
+        <NavItem
+          icon={LayoutGrid}
+          label="Agent Store"
+          collapsed={collapsed}
+          active={currentView === 'store'}
+          onClick={() => onViewChange?.('store')}
+        />
+
 
         {/* Divider */}
         {connectedApps.length > 0 && <div className="h-px bg-white/10 my-2" />}
@@ -159,7 +185,13 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
         })}
       </nav>
 
+
+      <div className="mt-auto border-t border-white/10">
+        <UserProfile />
+      </div>
+
       {/* Footer */}
+
       <div className="p-2 border-t border-white/10">
         <Button
           variant="ghost"

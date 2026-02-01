@@ -5,7 +5,13 @@ import { CodeExecutionTool } from './tools/codeExecutionTool'
 import { GoogleCalendarTool } from './tools/googleCalendarTool'
 import { NotionTool } from './tools/notionTool'
 import { GitHubTool } from './tools/githubTool'
+import { NotificationTool } from './tools/notificationTool'
+import { SupabaseTool } from './tools/supabaseTool'
+import { CreateAgentTool } from './tools/createAgentTool'
+import { CreateWorkflowTool } from './tools/createWorkflowTool'
+
 import { ErrorLogger, ErrorSeverity } from '../utils/errorLogger'
+
 
 export interface ToolDefinition {
     name: string
@@ -220,8 +226,103 @@ export class ToolService {
                 },
                 required: ['operation']
             }
+        },
+        {
+            name: 'send_notification',
+            description: 'Send a native system notification to the user.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    title: {
+                        type: 'string',
+                        description: 'The title of the notification'
+                    },
+                    body: {
+                        type: 'string',
+                        description: 'The message body of the notification'
+                    }
+                },
+                required: ['title', 'body']
+            }
+        },
+        {
+            name: 'supabase',
+            description: 'Interact with a connected Supabase project (BYOK). Use this to query tables or manage data.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    operation: {
+                        type: 'string',
+                        description: 'The operation to perform',
+                        enum: ['list_tables', 'get_tables', 'get_sample_rows', 'count_rows', 'query', 'insert', 'update']
+                    },
+                    table: {
+                        type: 'string',
+                        description: 'Table name (required for query, insert, update, get_sample_rows, count_rows)'
+                    },
+                    limit: {
+                        type: 'number',
+                        description: 'Number of rows to return (optional for get_sample_rows, default 5)'
+                    },
+                    query: {
+                        type: 'object',
+                        description: 'Query object for "query" operation (e.g. { select: "*", eq: { id: 1 } })'
+                    },
+                    data: {
+                        type: 'object',
+                        description: 'Data object for insert/update'
+                    },
+                    id: {
+                        type: 'string',
+                        description: 'Row ID for update operation'
+                    }
+                },
+                required: ['operation']
+            }
+        },
+        {
+            name: 'create_agent',
+            description: 'Create a new specialized AI agent. Agents have their own system prompts and can be used in workflows.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', description: 'Name of the agent' },
+                    description: { type: 'string', description: 'Short description of the agent' },
+                    systemPrompt: { type: 'string', description: 'The system prompt that defines the agent\'s personality and role' },
+                    icon: { type: 'string', description: 'Lucide icon name (e.g., Bot, Brain, Code, Terminal, Sparkles)' },
+                    color: { type: 'string', description: 'Hex color code (e.g., #3b82f6)' },
+                    enabledTools: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'List of tool names this agent is allowed to use'
+                    }
+                },
+                required: ['name', 'systemPrompt']
+            }
+        },
+        {
+            name: 'create_workflow',
+            description: 'Create a new automation workflow. Workflows are pipelines of steps triggered by events or schedules.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', description: 'Name of the workflow' },
+                    description: { type: 'string', description: 'Description of what the workflow does' },
+                    trigger: {
+                        type: 'object',
+                        description: 'Trigger configuration (e.g., { type: "manual" }, { type: "schedule", scheduleConfig: { frequency: "daily", time: "09:00" } })'
+                    },
+                    pipeline: {
+                        type: 'array',
+                        items: { type: 'object' },
+                        description: 'Array of pipeline steps. Each step needs a type (agent_action, wait, condition, integration_action) and config.'
+                    }
+                },
+                required: ['name', 'trigger', 'pipeline']
+            }
         }
     ]
+
 
     static getToolDefinitions(): ToolDefinition[] {
         return this.tools
@@ -261,6 +362,20 @@ export class ToolService {
                 case 'github':
                     result = await GitHubTool.execute(finalArgs.operation, finalArgs)
                     break
+                case 'send_notification':
+                    result = await NotificationTool.notify(finalArgs.title, finalArgs.body)
+                    break
+                case 'supabase':
+                    result = await new SupabaseTool().execute(finalArgs.operation, finalArgs)
+                    break
+                case 'create_agent':
+                    result = await CreateAgentTool.execute(finalArgs)
+                    break
+                case 'create_workflow':
+                    result = await CreateWorkflowTool.execute(finalArgs)
+                    break
+
+
                 default:
                     return { tool: name, result: `Unknown tool: ${name}`, isError: true }
             }

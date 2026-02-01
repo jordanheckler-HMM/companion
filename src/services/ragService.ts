@@ -31,6 +31,14 @@ export class RAGService {
     }
 
     /**
+     * Helper to generate a single embedding for a string
+     */
+    async generateEmbedding(text: string): Promise<number[] | undefined> {
+        const results = await this.generateEmbeddings([{ content: text, fileId: 'temp', id: 'temp' }])
+        return results[0]?.embedding
+    }
+
+    /**
      * Generates embeddings for a list of chunks using Ollama
      */
     async generateEmbeddings(chunks: KnowledgeChunk[]): Promise<KnowledgeChunk[]> {
@@ -47,18 +55,24 @@ export class RAGService {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        // Use dedicated embedding model (e.g., nomic-embed-text) instead of chat model
                         model: this.settings.ollamaEmbeddingModel || 'nomic-embed-text',
                         prompt: enrichedChunks[i].content
                     })
                 })
 
-                if (response.ok) {
-                    const data = await response.json()
-                    enrichedChunks[i].embedding = data.embedding
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    throw new Error(`Ollama embedding error (${response.status}): ${errorText}`)
                 }
-            } catch (error) {
+
+                const data = await response.json()
+                if (!data.embedding) {
+                    throw new Error('Ollama returned success but no embedding vector was found. Check your model.')
+                }
+                enrichedChunks[i].embedding = data.embedding
+            } catch (error: any) {
                 console.error('Error generating embedding for chunk:', error)
+                throw new Error(`Failed to generate embeddings: ${error.message}. Make sure Ollama is running and you have run 'ollama pull nomic-embed-text'`)
             }
         }
 

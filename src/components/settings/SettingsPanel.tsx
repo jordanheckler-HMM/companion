@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
-import { TestTube, Sparkles, ChevronDown, Folder } from 'lucide-react'
+import { TestTube, Sparkles, ChevronDown, Folder, Mic, Volume2 } from 'lucide-react'
 import { VaultService } from '@/services/VaultService'
 import { Button } from '@/components/ui/button'
 import { AIService } from '@/services/aiService'
@@ -14,6 +14,8 @@ export function SettingsPanel() {
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
     const [availableModels, setAvailableModels] = useState<string[]>([])
     const [showAdvanced, setShowAdvanced] = useState(false)
+    const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([])
+
 
     // Fetch models for the default selector
     useEffect(() => {
@@ -26,6 +28,26 @@ export function SettingsPanel() {
         }
         fetchModels()
     }, [settings.aiSettings.intelligenceMode, settings.aiSettings.ollamaUrl, settings.aiSettings.cloudProvider])
+
+    // Load available system voices
+    useEffect(() => {
+        const loadVoices = () => {
+            const voices = window.speechSynthesis.getVoices()
+            setAvailableVoices(voices)
+        }
+
+        loadVoices()
+        window.speechSynthesis.onvoiceschanged = loadVoices
+    }, [])
+
+    const handleVoicePreview = () => {
+        const utterance = new SpeechSynthesisUtterance('Hello, I am your companion. How can I help you today?')
+        const voice = availableVoices.find(v => v.name === settings.voiceSettings.localVoice)
+        if (voice) utterance.voice = voice
+        utterance.rate = settings.voiceSettings.speakingRate
+        window.speechSynthesis.speak(utterance)
+    }
+
 
     const handleTestConnection = async () => {
         setTesting(true)
@@ -617,6 +639,322 @@ export function SettingsPanel() {
                                     Generate token at <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" className="underline hover:text-white">GitHub Settings</a> → New Token (classic) → Apply 'repo' scope
                                 </p>
                             </div>
+
+                            {/* Supabase */}
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Supabase Configuration</label>
+                                <div className="space-y-3">
+                                    <input
+                                        type="text"
+                                        className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20"
+                                        placeholder="Project URL (https://xyz.supabase.co)"
+                                        value={settings.aiSettings.toolsEnabled?.supabase?.supabaseUrl || ''}
+                                        onChange={(e) => {
+                                            const currentTools = settings.aiSettings.toolsEnabled || {
+                                                web_search: true,
+                                                url_reader: true,
+                                                file_system: true,
+                                                execute_code: true,
+                                                google_calendar: true,
+                                                notion: true,
+                                                github: true,
+                                                supabase: { enabled: true, supabaseUrl: '', supabaseKey: '' }
+                                            }
+                                            const currentSupabase = currentTools.supabase || { enabled: true, supabaseUrl: '', supabaseKey: '' }
+
+                                            updateSettings({
+                                                aiSettings: {
+                                                    ...settings.aiSettings,
+                                                    toolsEnabled: {
+                                                        ...currentTools,
+                                                        supabase: {
+                                                            ...currentSupabase,
+                                                            supabaseUrl: e.target.value,
+                                                            enabled: true
+                                                        }
+                                                    }
+                                                }
+                                            })
+                                        }}
+                                    />
+                                    <input
+                                        type="password"
+                                        className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20"
+                                        placeholder="Service Role Key (for full table access)"
+                                        value={settings.aiSettings.toolsEnabled?.supabase?.supabaseKey || ''}
+                                        onChange={(e) => {
+                                            const currentTools = settings.aiSettings.toolsEnabled || {
+                                                web_search: true,
+                                                url_reader: true,
+                                                file_system: true,
+                                                execute_code: true,
+                                                google_calendar: true,
+                                                notion: true,
+                                                github: true,
+                                                supabase: { enabled: true, supabaseUrl: '', supabaseKey: '' }
+                                            }
+                                            const currentSupabase = currentTools.supabase || { enabled: true, supabaseUrl: '', supabaseKey: '' }
+
+                                            updateSettings({
+                                                aiSettings: {
+                                                    ...settings.aiSettings,
+                                                    toolsEnabled: {
+                                                        ...currentTools,
+                                                        supabase: {
+                                                            ...currentSupabase,
+                                                            supabaseKey: e.target.value,
+                                                            enabled: true
+                                                        }
+                                                    }
+                                                }
+                                            })
+                                        }}
+                                    />
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-1.5 opacity-60 hover:opacity-100 transition-opacity">
+                                    Use the <strong>Service Role Key</strong> for full table access. Get it from <a href="https://supabase.com/dashboard/project/_/settings/api" target="_blank" rel="noreferrer" className="underline hover:text-white">Supabase Dashboard</a> → Project Settings → API
+                                </p>
+                            </div>
+                        </div>
+                    </SettingsSection>
+
+                    {/* VOICE & AUDIO SECTION */}
+                    <SettingsSection title="Voice & Audio" defaultOpen={false}>
+                        <div className="bg-foreground/5 p-6 rounded-2xl border border-foreground/5 space-y-6">
+                            {/* Enable Voice Mode */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <label className="text-sm font-medium">Enable Voice Mode</label>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5 opacity-60">
+                                        Allow speaking to the AI and hearing responses
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() =>
+                                        updateSettings({
+                                            voiceSettings: {
+                                                ...settings.voiceSettings,
+                                                enabled: !settings.voiceSettings.enabled,
+                                            },
+                                        })
+                                    }
+                                    className={`relative w-11 h-6 rounded-full transition-colors ${settings.voiceSettings.enabled ? 'bg-primary-accent' : 'bg-foreground/20'
+                                        }`}
+                                >
+                                    <div
+                                        className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${settings.voiceSettings.enabled ? 'translate-x-5' : ''
+                                            }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {settings.voiceSettings.enabled && (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
+                                    {/* STT Engine */}
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 flex items-center gap-2">
+                                            <Mic className="h-3 w-3" />
+                                            Speech-to-Text Engine
+                                        </label>
+                                        <div className="flex bg-foreground/5 p-1 rounded-xl">
+                                            {(['local', 'cloud'] as const).map((engine) => (
+                                                <button
+                                                    key={engine}
+                                                    onClick={() =>
+                                                        updateSettings({
+                                                            voiceSettings: {
+                                                                ...settings.voiceSettings,
+                                                                sttEngine: engine,
+                                                            },
+                                                        })
+                                                    }
+                                                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-all ${settings.voiceSettings.sttEngine === engine
+                                                        ? 'bg-foreground text-zinc-950 shadow-md'
+                                                        : 'hover:bg-foreground/10'
+                                                        }`}
+                                                >
+                                                    {engine === 'local' ? 'Local (Private)' : 'Cloud (OpenAI)'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-60">
+                                            {settings.voiceSettings.sttEngine === 'local'
+                                                ? 'Uses browser Web Speech API (privacy-first)'
+                                                : 'Uses OpenAI Whisper API (requires API key)'}
+                                        </p>
+                                    </div>
+
+                                    {/* TTS Engine */}
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 flex items-center gap-2">
+                                            <Volume2 className="h-3 w-3" />
+                                            Text-to-Speech Engine
+                                        </label>
+                                        <div className="flex bg-foreground/5 p-1 rounded-xl">
+                                            {(['local', 'cloud'] as const).map((engine) => (
+                                                <button
+                                                    key={engine}
+                                                    onClick={() =>
+                                                        updateSettings({
+                                                            voiceSettings: {
+                                                                ...settings.voiceSettings,
+                                                                ttsEngine: engine,
+                                                            },
+                                                        })
+                                                    }
+                                                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-all ${settings.voiceSettings.ttsEngine === engine
+                                                        ? 'bg-foreground text-zinc-950 shadow-md'
+                                                        : 'hover:bg-foreground/10'
+                                                        }`}
+                                                >
+                                                    {engine === 'local' ? 'Local (macOS)' : 'Cloud (OpenAI)'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground mt-1.5 opacity-60">
+                                            {settings.voiceSettings.ttsEngine === 'local'
+                                                ? 'Uses macOS native voices (free, offline)'
+                                                : 'Uses OpenAI TTS API (premium quality, requires API key)'}
+                                        </p>
+                                    </div>
+
+                                    {/* Voice Selection */}
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">
+                                            Voice
+                                        </label>
+                                        {settings.voiceSettings.ttsEngine === 'cloud' ? (
+                                            <select
+                                                className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm appearance-none outline-none focus:ring-1 focus:ring-foreground/20"
+                                                value={settings.voiceSettings.cloudVoice}
+                                                onChange={(e) =>
+                                                    updateSettings({
+                                                        voiceSettings: {
+                                                            ...settings.voiceSettings,
+                                                            cloudVoice: e.target.value as any,
+                                                        },
+                                                    })
+                                                }
+                                            >
+                                                <option value="alloy">Alloy (Neutral)</option>
+                                                <option value="echo">Echo (Deep)</option>
+                                                <option value="fable">Fable (Expressive)</option>
+                                                <option value="onyx">Onyx (Authoritative)</option>
+                                                <option value="nova">Nova (Balanced)</option>
+                                                <option value="shimmer">Shimmer (Soft)</option>
+                                            </select>
+                                        ) : (
+                                            <select
+                                                className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm appearance-none outline-none focus:ring-1 focus:ring-foreground/20"
+                                                value={settings.voiceSettings.localVoice}
+                                                onChange={(e) =>
+                                                    updateSettings({
+                                                        voiceSettings: {
+                                                            ...settings.voiceSettings,
+                                                            localVoice: e.target.value,
+                                                        },
+                                                    })
+                                                }
+                                            >
+                                                {availableVoices.map((voice) => (
+                                                    <option key={voice.name} value={voice.name}>
+                                                        {voice.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+
+                                    {/* Speaking Rate */}
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">
+                                            Speaking Rate: {settings.voiceSettings.speakingRate.toFixed(1)}x
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="0.5"
+                                            max="2.0"
+                                            step="0.1"
+                                            value={settings.voiceSettings.speakingRate}
+                                            onChange={(e) =>
+                                                updateSettings({
+                                                    voiceSettings: {
+                                                        ...settings.voiceSettings,
+                                                        speakingRate: parseFloat(e.target.value),
+                                                    },
+                                                })
+                                            }
+                                            className="w-full h-2 bg-foreground/10 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                    </div>
+
+                                    {/* Speak Responses */}
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <label className="text-sm font-medium">Speak Responses</label>
+                                            <p className="text-[10px] text-muted-foreground mt-0.5 opacity-60">
+                                                AI will speak its responses aloud
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() =>
+                                                updateSettings({
+                                                    voiceSettings: {
+                                                        ...settings.voiceSettings,
+                                                        speakResponses: !settings.voiceSettings.speakResponses,
+                                                    },
+                                                })
+                                            }
+                                            className={`relative w-11 h-6 rounded-full transition-colors ${settings.voiceSettings.speakResponses ? 'bg-primary-accent' : 'bg-foreground/20'
+                                                }`}
+                                        >
+                                            <div
+                                                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${settings.voiceSettings.speakResponses ? 'translate-x-5' : ''
+                                                    }`}
+                                            />
+                                        </button>
+                                    </div>
+
+                                    {/* Auto-Listen */}
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <label className="text-sm font-medium">Auto-Listen</label>
+                                            <p className="text-[10px] text-muted-foreground mt-0.5 opacity-60">
+                                                Automatically reactivate mic after AI speaks
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() =>
+                                                updateSettings({
+                                                    voiceSettings: {
+                                                        ...settings.voiceSettings,
+                                                        autoListen: !settings.voiceSettings.autoListen,
+                                                    },
+                                                })
+                                            }
+                                            className={`relative w-11 h-6 rounded-full transition-colors ${settings.voiceSettings.autoListen ? 'bg-primary-accent' : 'bg-foreground/20'
+                                                }`}
+                                        >
+                                            <div
+                                                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${settings.voiceSettings.autoListen ? 'translate-x-5' : ''
+                                                    }`}
+                                            />
+                                        </button>
+                                    </div>
+
+                                    {/* Preview Button */}
+                                    {settings.voiceSettings.ttsEngine === 'local' && (
+                                        <Button
+                                            onClick={handleVoicePreview}
+                                            className="w-full"
+                                            variant="outline"
+                                        >
+                                            <Volume2 className="h-4 w-4 mr-2" />
+                                            Preview Voice
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </SettingsSection>
 

@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { readTextFile, readFile } from '@tauri-apps/plugin-fs'
-import { Send, Paperclip, ChevronDown, Sparkles, Square, X, FileEdit, Cloud, Home, Database, Trash2 } from 'lucide-react'
+import { Send, PaperclipIcon as Paperclip, X, FileEdit, Trash2, Database, Cloud, Home, Square, ChevronDown, Sparkles, Mic, MicOff, Brain } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -18,6 +19,9 @@ import { getDocument } from 'pdfjs-dist'
 import mammoth from 'mammoth'
 import { CodeEditor } from './CodeEditor'
 import logo from '@/assets/logo.png'
+import { audioService } from '@/services/AudioService'
+import { speechToTextService } from '@/services/SpeechToTextService'
+import { textToSpeechService } from '@/services/TextToSpeechService'
 
 
 interface Message {
@@ -137,7 +141,10 @@ export function ChatWindow() {
     setAvailableModels
   } = useStore()
 
+  const [useVault, setUseVault] = useState(settings.aiSettings.enableVaultRAG || false)
+
   const [input, setInput] = useState('')
+
   const [isLoading, setIsLoading] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<Array<{ name: string; content: string }>>([])
   const [editorMode, setEditorMode] = useState<{
@@ -147,6 +154,8 @@ export function ChatWindow() {
     filePath?: string
     language?: string
   } | null>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -188,15 +197,39 @@ export function ChatWindow() {
     }
   }, [messages])
 
+
+  useEffect(() => {
+    const aiPrompts = [] as any[] // Logic moved to handleSend. DISABLED: pendingContext.filter(ctx => ctx.type === 'ai_prompt' && ctx.prompt)
+    if (aiPrompts.length > 0) {
+      // Use the most recent prompt
+      const prompt = aiPrompts[aiPrompts.length - 1].prompt
+      if (prompt) {
+        setInput(prompt)
+        // Focus the input
+        inputRef.current?.focus()
+
+        // Clear these specific prompts so they don't reappear or get duplicate-sent
+        // We use a small timeout to ensure the UI update has processed
+        setTimeout(() => {
+          // Ideally we'd remove just these IDs, but clearPendingContext wipes all.
+          // For now this is fine as we just consumed them.
+          // To be safer, we should probably filter and remove.
+          // But clearPendingContext() is what handleSend uses too.
+          clearPendingContext()
+        }, 100)
+      }
+    }
+  }, [pendingContext, clearPendingContext])
+
   // No longer needed here, moved to App.tsx and decentralized via store
 
   const handleSend = async () => {
     const userInput = input.trim()
 
-    // Collect prompts from pending context (ai_prompt type)
-    const pendingPrompts = pendingContext.filter(ctx => ctx.type === 'ai_prompt' && ctx.prompt)
+    // Check for other context types that should allow sending without text
+    const hasPendingContext = pendingContext.length > 0;
 
-    if (!userInput && pendingFiles.length === 0 && pendingPrompts.length === 0) return
+    if (!userInput && pendingFiles.length === 0 && !hasPendingContext) return
     if (isLoading) return
 
     setInput('')
@@ -204,11 +237,24 @@ export function ChatWindow() {
     userHasScrolledUpRef.current = false
 
     // Build the full message content
-    // If there are pending prompts, prepend them to the user input
+    // Collect prompts from pending context (ai_prompt type)
+    const pendingPrompts = pendingContext.filter(ctx => ctx.type === 'ai_prompt' && ctx.prompt)
+    const tableContexts = pendingContext.filter(ctx => ctx.type === 'supabase_table')
+
     let fullUserMessage = userInput
+
+    // Add AI prompts
     if (pendingPrompts.length > 0) {
       const promptTexts = pendingPrompts.map(p => p.prompt).join('\n')
-      fullUserMessage = userInput ? `${promptTexts}\n\n${userInput}` : promptTexts
+      fullUserMessage = fullUserMessage ? `${promptTexts} \n\n${fullUserMessage} ` : promptTexts
+    }
+
+    // Add Table queries
+    if (tableContexts.length > 0) {
+      const tableQueries = tableContexts.map(t => t.metadata?.query).filter(Boolean).join('\n');
+      if (tableQueries) {
+        fullUserMessage = fullUserMessage ? `${tableQueries}\n\n${fullUserMessage}` : tableQueries;
+      }
     }
 
     // Add user message if there's text
@@ -224,7 +270,7 @@ export function ChatWindow() {
       for (const file of pendingFiles) {
         addMessage({
           role: 'user',
-          content: `Attached file: **${file.name}** (Session Only)`
+          content: `Attached file: ** ${file.name}** (Session Only)`
         })
       }
     }
@@ -266,11 +312,14 @@ export function ChatWindow() {
       const modelDef = availableModels.find(m => m.id === selectedModelId)
       const modelLabel = modelDef ? modelDef.displayName : selectedModelId
 
-      // Search Knowledge Base for context
-      const relevantChunks = await ragService.search(fullUserMessage || '', knowledgeBase, 3)
-      let contextText = relevantChunks.length > 0
-        ? `\n\nRelevant information from user's KNOWLEDGE BASE files:\n${relevantChunks.map((c: any) => `--- KNOWLEDGE CONTEXT ---\n${c.content}\n------------------`).join('\n\n')}`
-        : ''
+      // Search Knowledge Base for context if enabled
+      let contextText = ''
+      if (useVault && knowledgeBase.length > 0) {
+        const relevantChunks = await ragService.search(fullUserMessage || '', knowledgeBase, 3)
+        contextText = relevantChunks.length > 0
+          ? `\n\nRelevant information from user's KNOWLEDGE BASE files:\n${relevantChunks.map((c: any) => `--- KNOWLEDGE CONTEXT ---\n${c.content}\n------------------`).join('\n\n')}`
+          : ''
+      }
 
       // Add pending file content to context
       if (pendingFiles.length > 0) {
@@ -501,6 +550,89 @@ export function ChatWindow() {
   const closeEditor = () => {
     setEditorMode(null)
   }
+
+  // Voice functions
+  const handleVoiceToggle = async () => {
+    if (!settings.voiceSettings.enabled) {
+      addMessage({
+        role: 'assistant',
+        content: 'Voice mode is disabled. Enable it in Settings → Voice & Audio.'
+      })
+      return
+    }
+
+    if (isRecording) {
+      // Stop recording and transcribe
+      try {
+        setIsRecording(false)
+        const audioBlob = await audioService.stopRecording()
+        const transcript = await speechToTextService.transcribe(audioBlob)
+
+        if (transcript) {
+          setInput(transcript)
+          inputRef.current?.focus()
+        }
+      } catch (error) {
+        console.error('Voice recording error:', error)
+        addMessage({
+          role: 'assistant',
+          content: `Voice error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
+    } else {
+      // Check permission before starting
+      const permissionCheck = await audioService.checkMicrophonePermission()
+
+      if (!permissionCheck.granted && permissionCheck.message) {
+        // Show helpful message about enabling permissions
+        addMessage({
+          role: 'assistant',
+          content: permissionCheck.message
+        })
+        return
+      }
+
+      // Start recording
+      try {
+        await audioService.startRecording()
+        setIsRecording(true)
+      } catch (error) {
+        console.error('Failed to start recording:', error)
+        addMessage({
+          role: 'assistant',
+          content: `Microphone error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
+    }
+  }
+
+  // Speak AI responses if voice mode AND speakResponses are enabled
+  useEffect(() => {
+    if (!settings.voiceSettings.enabled || !settings.voiceSettings.speakResponses) return
+
+    const lastMessage = messages[messages.length - 1]
+    if (lastMessage && lastMessage.role === 'assistant' && lastMessage.status === 'done' && lastMessage.content) {
+      // Speak the response
+      const speakResponse = async () => {
+        try {
+          setIsSpeaking(true)
+          await textToSpeechService.speak(lastMessage.content)
+          setIsSpeaking(false)
+
+          // Auto-listen if enabled
+          if (settings.voiceSettings.autoListen && !isRecording) {
+            setTimeout(() => {
+              handleVoiceToggle()
+            }, 500)
+          }
+        } catch (error) {
+          console.error('TTS error:', error)
+          setIsSpeaking(false)
+        }
+      }
+      speakResponse()
+    }
+  }, [messages, settings.voiceSettings.enabled, settings.voiceSettings.speakResponses])
 
   const filteredModels = availableModels.filter(m => {
     if (settings.aiSettings.intelligenceMode === 'local') return m.type === 'local'
@@ -754,36 +886,78 @@ export function ChatWindow() {
           </div>
         )}
 
-        <div className="flex gap-2 items-end">
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            accept=".txt,.md,.pdf,.docx"
-            onChange={handleFileUpload}
-          />
+        {/* Input Area */}
+        <div className="flex gap-3 items-end max-w-4xl mx-auto">
+          {/* Attachments & Tools */}
+          <div className="flex flex-col gap-2">
+            <Button
+              variant={useVault ? "default" : "outline"}
+              size="icon"
+              onClick={() => setUseVault(!useVault)}
+              className={cn(
+                "h-10 w-10 rounded-xl transition-all",
+                useVault
+                  ? "bg-purple-500/20 text-purple-400 border-purple-500/50 hover:bg-purple-500/30"
+                  : "bg-white/5 border-white/10 hover:bg-white/10 opacity-70 hover:opacity-100"
+              )}
+              title={useVault ? "Vault RAG Enabled" : "Vault RAG Disabled"}
+            >
+              <Brain className="h-5 w-5" />
+            </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="glass-hover flex-shrink-0"
-            onClick={() => fileInputRef.current?.click()}
-            title="Attach file"
-          >
-            <Paperclip className="h-4 w-4" />
-          </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".txt,.md,.pdf,.docx"
+              onChange={handleFileUpload}
+            />
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="glass-hover flex-shrink-0"
-            onClick={handleNativeFileOpen}
-            title="Open in editor"
-          >
-            <FileEdit className="h-4 w-4" />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="glass-hover flex-shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach file"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="glass-hover flex-shrink-0"
+              onClick={handleNativeFileOpen}
+              title="Open in editor"
+            >
+              <FileEdit className="h-4 w-4" />
+            </Button>
+
+            {/* Voice Recording Button */}
+            {settings.voiceSettings.enabled && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "glass-hover flex-shrink-0 transition-all duration-300",
+                  isRecording && "bg-red-500/20 border-red-500/50 animate-pulse"
+                )}
+                onClick={handleVoiceToggle}
+                title={isRecording ? "Stop recording" : "Start voice input"}
+                disabled={isSpeaking}
+              >
+                {isRecording ? (
+                  <MicOff className="h-4 w-4 text-red-400" />
+                ) : (
+                  <Mic className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+
+          </div>
 
           <Input
+
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
