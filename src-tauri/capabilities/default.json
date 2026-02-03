@@ -205,6 +205,14 @@
         }
       ]
     },
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        {
+          "url": "*://*"
+        }
+      ]
+    },
     "http:default",
     "store:default",
     "dialog:default",
