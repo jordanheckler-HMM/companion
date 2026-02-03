@@ -71,13 +71,8 @@ export function SaveToVaultConfig({ step, updateStep, availableVariables }: Save
     const fileNaming = step.fileNaming || 'manual'
     const writeMode = step.writeMode || 'overwrite'
 
-    // Get only markdown/text files for selection
-    const selectableFiles = vaultFiles.filter(f =>
-        f.isDirectory ||
-        f.name.endsWith('.md') ||
-        f.name.endsWith('.txt') ||
-        f.name.endsWith('.json')
-    )
+    // Get selectable files (excluding hidden ones which are already handled in VaultService)
+    const selectableFiles = vaultFiles
 
     return (
         <div className="space-y-5">

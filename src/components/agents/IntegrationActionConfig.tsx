@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Github, Calendar, AlertCircle } from 'lucide-react'
+import { FileText, Github, Calendar, AlertCircle, Database } from 'lucide-react'
 import { useStore } from '@/store'
 
 interface IntegrationActionConfigProps {
@@ -41,6 +41,16 @@ const INTEGRATIONS = [
         actions: [
             { id: 'create_event', name: 'Create Event', args: ['title', 'startTime', 'endTime', 'description'] },
             { id: 'list_events', name: 'List Events', args: ['count'] }
+        ]
+    },
+    {
+        id: 'supabase',
+        name: 'Supabase',
+        icon: Database,
+        actions: [
+            { id: 'query', name: 'Query Table', args: ['table', 'select', 'filter'] },
+            { id: 'insert', name: 'Insert Row', args: ['table', 'data'] },
+            { id: 'rpc', name: 'Call Function (RPC)', args: ['functionName', 'args'] }
         ]
     }
 ]
@@ -85,6 +95,7 @@ export function IntegrationActionConfig({ integrationId, integrationAction, inte
             case 'notion': return !!settings.aiSettings.notionApiKey
             case 'github': return !!settings.aiSettings.githubApiKey
             case 'google_calendar': return !!settings.aiSettings.googleCalendarApiKey
+            case 'supabase': return !!settings.aiSettings.toolsEnabled?.supabase?.enabled
             default: return true
         }
     }

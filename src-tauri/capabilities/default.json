@@ -96,6 +96,9 @@
           "path": "$HOME/companion-workspace/**"
         },
         {
+          "path": "$HOME/companion_vault/**"
+        },
+        {
           "path": "$RESOURCE/**"
         },
         {
@@ -116,6 +119,9 @@
           "path": "$HOME/companion-workspace/**"
         },
         {
+          "path": "$HOME/companion_vault/**"
+        },
+        {
           "path": "$TEMP/**"
         }
       ]
@@ -131,6 +137,9 @@
         },
         {
           "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$HOME/companion_vault/**"
         },
         {
           "path": "$TEMP/**"
@@ -150,6 +159,9 @@
           "path": "$HOME/companion-workspace/**"
         },
         {
+          "path": "$HOME/companion_vault/**"
+        },
+        {
           "path": "$TEMP/**"
         }
       ]
@@ -165,6 +177,9 @@
         },
         {
           "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$HOME/companion_vault/**"
         },
         {
           "path": "$TEMP/**"
@@ -184,6 +199,9 @@
           "path": "$HOME/companion-workspace/**"
         },
         {
+          "path": "$HOME/companion_vault/**"
+        },
+        {
           "path": "$TEMP/**"
         }
       ]
@@ -199,6 +217,9 @@
         },
         {
           "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$HOME/companion_vault/**"
         },
         {
           "path": "$TEMP/**"
