@@ -109,29 +109,47 @@ export class QueryRouter {
     public static selectModel(
         mode: 'local' | 'cloud',
         preferredModelId?: string,
-        _queryContext?: { input: string; attachmentCount: number; toolsEnabled: boolean }
+        queryContext?: { input: string; attachmentCount: number; toolsEnabled: boolean; hasImages?: boolean }
     ): string {
         const registry = ModelRegistry.getInstance()
         const models = registry.getAllModels()
 
-        if (mode === 'cloud') {
-            // If preferred is cloud, use it. Else use flagship logic.
-            const preferred = preferredModelId ? models.find(m => m.id === preferredModelId) : null
-            if (preferred && preferred.type === 'cloud') return preferred.id
+        // Helper to check if a model is valid for the current context
+        const isValid = (m: any) => {
+            if (m.status !== 'available') return false
+            if (queryContext?.hasImages && !m.capabilities.vision) return false
+            return true
+        }
 
-            return models.find(m => m.id === 'gpt-5.2')?.id ||
-                models.find(m => m.id === 'claude-opus-4-5-20251101')?.id ||
-                models.find(m => m.id === 'gpt-5-main')?.id ||
-                models.find(m => m.type === 'cloud' && (m.id.includes('4') || m.id.includes('opus') || m.id.includes('sonnet')))?.id ||
+        if (mode === 'cloud') {
+            // If preferred is cloud and valid, use it
+            const preferred = preferredModelId ? models.find(m => m.id === preferredModelId) : null
+            if (preferred && preferred.type === 'cloud' && preferred.status === 'available') return preferred.id
+
+            // Fallback: Find best cloud model that matches requirements
+            const cloudModels = models.filter(m => m.type === 'cloud' && isValid(m))
+
+            // Priority list for fallbacks
+            return cloudModels.find(m => m.id.includes('gpt-4o'))?.id ||
+                cloudModels.find(m => m.id.includes('claude-3-5-sonnet'))?.id ||
+                cloudModels.find(m => m.id.includes('gemini-1.5-pro'))?.id ||
+                cloudModels[0]?.id ||
                 'gpt-4o'
         }
 
-        // Local mode: Strictly local
+        // Local mode
         const preferred = preferredModelId ? models.find(m => m.id === preferredModelId) : null
         if (preferred && preferred.type === 'local' && preferred.status === 'available') return preferred.id
 
-        // Fallback to best available local model
-        const bestLocal = models.find(m => m.type === 'local' && m.status === 'available')
-        return bestLocal?.id || 'gpt-4o' // Cloud fallback if no local models
+        // Fallback to best available local model that supports requirements
+        const localModels = models.filter(m => m.type === 'local' && isValid(m))
+        return localModels[0]?.id ||
+            // If no local model supports vision, fall back to cloud vision model? 
+            // Or just return best local and let it fail/warn?
+            // Strategy: If user explicitly wants local, we should try to stay local.
+            // but if they send an image and no local model supports it, we might have to fail or default to cloud.
+            // For now, return best local and let UI handle error if it really fails, 
+            // OR fallback to cloud for vision tasks.
+            (queryContext?.hasImages ? 'gpt-4o' : (models.find(m => m.type === 'local' && m.status === 'available')?.id || 'gpt-4o'))
     }
 }

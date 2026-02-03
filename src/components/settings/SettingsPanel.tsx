@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { open } from '@tauri-apps/plugin-shell'
 import { useStore } from '@/store'
-import { TestTube, Sparkles, ChevronDown, Folder, Mic, Volume2 } from 'lucide-react'
+import { TestTube, Sparkles, ChevronDown, Folder, Mic, Volume2, Mail, Globe, ExternalLink } from 'lucide-react'
 import { VaultService } from '@/services/VaultService'
 import { Button } from '@/components/ui/button'
 import { AIService } from '@/services/aiService'
@@ -102,7 +103,7 @@ export function SettingsPanel() {
                 <div className="max-w-3xl space-y-8">
 
                     {/* VISUAL STYLE SECTION */}
-                    <SettingsSection title="Appearance" defaultOpen={true}>
+                    <SettingsSection title="Appearance" defaultOpen={false}>
                         <div className="space-y-6 bg-foreground/5 p-5 rounded-2xl border border-foreground/5">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
@@ -960,19 +961,90 @@ export function SettingsPanel() {
 
                     {/* ABOUT SECTION */}
                     <SettingsSection title="Support & About" defaultOpen={false}>
-                        <div className="bg-foreground/5 p-6 rounded-2xl border border-foreground/5 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Software Version</span>
-                                <span className="text-xs font-mono bg-foreground/10 px-2 py-0.5 rounded-full">v1.2.4-stable</span>
+                        <div className="space-y-6">
+                            {/* Contact & Links Card */}
+                            <div className="bg-foreground/5 p-6 rounded-2xl border border-foreground/5 space-y-5">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">Software Version</span>
+                                    <span className="text-xs font-mono bg-foreground/10 px-2 py-0.5 rounded-full opacity-70">v1.2.4-stable</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">Build Type</span>
+                                    <span className="text-xs font-mono bg-primary-accent/20 text-primary-accent px-2 py-0.5 rounded-full">Developer Edition</span>
+                                </div>
+
+                                <div className="pt-4 border-t border-foreground/5 space-y-3">
+                                    <button
+                                        onClick={() => open('mailto:hymetalab@gmail.com')}
+                                        className="w-full flex items-center gap-3 p-3 rounded-xl glass-hover border border-white/5 transition-all text-sm group text-left"
+                                    >
+                                        <div className="w-8 h-8 rounded-lg bg-primary-accent/10 flex items-center justify-center text-primary-accent group-hover:bg-primary-accent group-hover:text-white transition-colors">
+                                            <Mail className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-semibold">Support Email</p>
+                                            <p className="text-xs text-foreground/50">hymetalab@gmail.com</p>
+                                        </div>
+                                        <ExternalLink className="w-3 h-3 opacity-30 group-hover:opacity-100" />
+                                    </button>
+
+                                    <button
+                                        onClick={() => open('https://hymetalab-home-base-203204719108.us-west1.run.app')}
+                                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-primary-accent text-white shadow-lg shadow-primary-accent/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm group text-left"
+                                    >
+                                        <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                                            <Globe className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-bold">HYMetaLab Homebase</p>
+                                            <p className="text-xs text-white/70">Visit the lab research hub</p>
+                                        </div>
+                                        <ExternalLink className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Build Type</span>
-                                <span className="text-xs font-mono bg-primary-accent/20 text-primary-accent px-2 py-0.5 rounded-full">Developer Edition</span>
-                            </div>
-                            <div className="pt-4 border-t border-foreground/5">
-                                <p className="text-[11px] text-foreground/40 leading-relaxed">
-                                    Companion is a privacy-first AI workspace. All local conversations are stored on your machine and never used for training without explicit cloud provider consent.
-                                </p>
+
+                            {/* Detailed About Section */}
+                            <div className="bg-foreground/5 p-6 rounded-2xl border border-foreground/5 space-y-4">
+                                <h4 className="text-xs font-bold uppercase tracking-widest text-primary-accent">About HYMetaLab</h4>
+
+                                <div className="space-y-4 text-sm leading-relaxed text-foreground/80">
+                                    <p>
+                                        HYMetaLab is an independent research lab focused on the scientific study of <strong>coherence, resilience, and meaning</strong> in intelligent systems—human, artificial, and collective.
+                                    </p>
+
+                                    <p>
+                                        The lab develops open, reproducible frameworks for understanding how systems stay aligned, recover from disruption, and accumulate value over time without drifting, fragmenting, or collapsing. Our work bridges <strong>information theory, complex systems, and applied AI</strong>, with an emphasis on measurement over speculation.
+                                    </p>
+
+                                    <p>
+                                        This app is a practical extension of that research. It is designed to be <strong>local-first, privacy-respecting, and transparent</strong>, giving users direct access to tools built on HYMetaLab’s coherence science without requiring cloud dependency or data extraction.
+                                    </p>
+
+                                    <div className="p-4 bg-foreground/5 rounded-xl border border-white/5 italic text-xs text-foreground/60">
+                                        All research and software produced by HYMetaLab operates under a formal institutional charter and published validation protocols. Claims are versioned, assumptions are disclosed, and uncertainty is treated as a first-class signal—not a failure.
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 pt-2">
+                                        <div className="space-y-1">
+                                            <p className="text-[10px] font-bold uppercase text-foreground/40">Motto</p>
+                                            <p className="text-xs font-medium italic">Integrity → Resilience → Meaning</p>
+                                        </div>
+                                        <div className="space-y-1 text-right">
+                                            <p className="text-[10px] font-bold uppercase text-foreground/40">Founded & Directed By</p>
+                                            <p className="text-xs font-medium">Jordan Anthony Heckler</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-foreground/5">
+                                        <p className="text-[10px] text-foreground/40 leading-relaxed uppercase font-bold tracking-tight">
+                                            Status: Independent, open research lab
+                                        </p>
+                                        <p className="text-[10px] text-foreground/40 mt-1">
+                                            This software stores data locally on your device and is never used for training or analysis without explicit user consent.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </SettingsSection>

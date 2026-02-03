@@ -8,7 +8,7 @@ import {
     Users, Plus, Hash, Send, Paperclip, X, Mic, MicOff,
     ChevronDown, Database, Brain, Square, UserPlus,
     Trash2, LogOut, Pencil, Check, Loader2, Upload, FileText, Trash, Settings,
-    Cloud, Home, Sparkles, Shield, ShieldAlert
+    Cloud, Home, Sparkles, Shield, ShieldAlert, Copy, Volume2, Smile
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,11 +18,14 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import logo from '@/assets/logo.png'
 import { speechToTextService } from '@/services/SpeechToTextService'
+import { textToSpeechService } from '@/services/TextToSpeechService'
+import { QueryRouter } from '@/services/QueryRouter'
 
 interface PendingFile {
     name: string
     content: string
     type: string
+    fileObject?: File
 }
 
 export function TeamWorkspace() {
@@ -46,6 +49,7 @@ export function TeamWorkspace() {
     const [vaultSources, setVaultSources] = useState<string[]>([])
     const [showVaultManager, setShowVaultManager] = useState(false)
     const [isIndexing, setIsIndexing] = useState(false)
+    const [askAI, setAskAI] = useState(false)
 
     // Voice state
     const [isRecording, setIsRecording] = useState(false)
@@ -69,6 +73,11 @@ export function TeamWorkspace() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null)
     const [editingThreadId, setEditingThreadId] = useState<string | null>(null)
     const [editThreadName, setEditThreadName] = useState('')
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+    const [teamDeleteConfirm, setTeamDeleteConfirm] = useState(false)
+    const [teamLeaveConfirm, setTeamLeaveConfirm] = useState(false)
+    const [memberRemoveConfirmId, setMemberRemoveConfirmId] = useState<string | null>(null)
+    const [vaultSourceDeleteConfirm, setVaultSourceDeleteConfirm] = useState<string | null>(null)
 
     // Load teams and current user on mount
     useEffect(() => {
@@ -204,16 +213,23 @@ export function TeamWorkspace() {
         }
     }
 
-    const handleDeleteThread = async (threadId: string, threadName: string) => {
-        if (!confirm(`Delete thread "#${threadName}"? All messages will be lost.`)) return
+    const handleDeleteThread = async (threadId: string) => {
+        if (deleteConfirmId !== threadId) {
+            setDeleteConfirmId(threadId)
+            return
+        }
+
         try {
             await TeamService.deleteThread(threadId)
             setThreads(prev => prev.filter(t => t.id !== threadId))
             if (activeThread?.id === threadId) {
                 setActiveThread(null)
             }
+            setDeleteConfirmId(null)
         } catch (err) {
             console.error('Failed to delete thread:', err)
+            alert('Failed to delete thread: ' + (err instanceof Error ? err.message : String(err)))
+            setDeleteConfirmId(null)
         }
     }
 
@@ -236,29 +252,39 @@ export function TeamWorkspace() {
 
     const handleDeleteTeam = async () => {
         if (!activeTeam) return
-        if (!confirm(`Are you sure you want to delete "${activeTeam.name}"? This cannot be undone.`)) return
+        if (!teamDeleteConfirm) {
+            setTeamDeleteConfirm(true)
+            return
+        }
 
         try {
             await TeamService.deleteTeam(activeTeam.id)
             setTeams(prev => prev.filter(t => t.id !== activeTeam.id))
             setActiveTeam(teams.length > 1 ? teams.find(t => t.id !== activeTeam.id) || null : null)
+            setTeamDeleteConfirm(false)
         } catch (err) {
             console.error('Failed to delete team:', err)
-            alert('Failed to delete team')
+            alert('Failed to delete team: ' + (err instanceof Error ? err.message : String(err)))
+            setTeamDeleteConfirm(false)
         }
     }
 
     const handleLeaveTeam = async () => {
         if (!activeTeam) return
-        if (!confirm(`Are you sure you want to leave "${activeTeam.name}"?`)) return
+        if (!teamLeaveConfirm) {
+            setTeamLeaveConfirm(true)
+            return
+        }
 
         try {
             await TeamService.leaveTeam(activeTeam.id)
             setTeams(prev => prev.filter(t => t.id !== activeTeam.id))
             setActiveTeam(teams.length > 1 ? teams.find(t => t.id !== activeTeam.id) || null : null)
+            setTeamLeaveConfirm(false)
         } catch (err) {
             console.error('Failed to leave team:', err)
-            alert('Failed to leave team')
+            alert('Failed to leave team: ' + (err instanceof Error ? err.message : String(err)))
+            setTeamLeaveConfirm(false)
         }
     }
 
@@ -276,16 +302,21 @@ export function TeamWorkspace() {
         }
     }
 
-    const handleRemoveMember = async (userId: string, username: string) => {
+    const handleRemoveMember = async (userId: string) => {
         if (!activeTeam) return
-        if (!confirm(`Remove ${username} from the team?`)) return
+        if (memberRemoveConfirmId !== userId) {
+            setMemberRemoveConfirmId(userId)
+            return
+        }
 
         try {
             await TeamService.removeMember(activeTeam.id, userId)
             await loadMembers()
+            setMemberRemoveConfirmId(null)
         } catch (err) {
             console.error('Failed to remove member:', err)
-            alert('Failed to remove member')
+            alert('Failed to remove member: ' + (err instanceof Error ? err.message : String(err)))
+            setMemberRemoveConfirmId(null)
         }
     }
 
@@ -302,14 +333,56 @@ export function TeamWorkspace() {
 
     const handleDeleteVaultSource = async (source: string) => {
         if (!activeTeam) return
-        if (!confirm(`Remove "${source}" and all its knowledge from the team vault?`)) return
+        if (vaultSourceDeleteConfirm !== source) {
+            setVaultSourceDeleteConfirm(source)
+            return
+        }
 
         try {
             await TeamService.deleteTeamVaultSource(activeTeam.id, source)
             await loadVaultSources()
+            setVaultSourceDeleteConfirm(null)
         } catch (err) {
             console.error('Failed to delete vault source:', err)
-            alert('Failed to delete vault source')
+            alert('Failed to delete vault source: ' + (err instanceof Error ? err.message : String(err)))
+            setVaultSourceDeleteConfirm(null)
+        }
+    }
+
+    const handleToggleReaction = async (messageId: string, emoji: string) => {
+        if (!currentUserId) return
+
+        const message = messages.find(m => m.id === messageId)
+        if (!message) return
+
+        const metadata = { ...(message.metadata || {}) }
+        const reactions = { ...(metadata.reactions || {}) }
+        const userList = [...(reactions[emoji] || [])]
+
+        if (userList.includes(currentUserId)) {
+            // Remove
+            reactions[emoji] = userList.filter((id: string) => id !== currentUserId)
+        } else {
+            // Add
+            reactions[emoji] = [...userList, currentUserId]
+        }
+
+        // Clean up empty reactions
+        if (reactions[emoji].length === 0) {
+            delete reactions[emoji]
+        }
+
+        metadata.reactions = reactions
+
+        // Optimistic update
+        setMessages(prev => prev.map(m =>
+            m.id === messageId ? { ...m, metadata } : m
+        ))
+
+        try {
+            await TeamService.updateMessageMetadata(messageId, metadata)
+        } catch (error) {
+            console.error('Failed to update reaction:', error)
         }
     }
 
@@ -346,15 +419,49 @@ export function TeamWorkspace() {
         setInput('')
         setIsLoading(true)
 
-        // Build context from files
-        let context = ''
-        if (pendingFiles.length > 0) {
-            context = pendingFiles.map(f => `[File: ${f.name}]\n${f.content}`).join('\n\n')
-            setPendingFiles([])
+        // Separate images from text files
+        const imageFiles = pendingFiles.filter(f => f.type.startsWith('image/'))
+        const textFiles = pendingFiles.filter(f => !f.type.startsWith('image/'))
+
+        // Upload images if any
+        const uploadedImageUrls: string[] = []
+        if (imageFiles.length > 0 && activeTeam) {
+            for (const img of imageFiles) {
+                if (img.fileObject) {
+                    try {
+                        const url = await TeamService.uploadTeamAsset(activeTeam.id, img.fileObject)
+                        uploadedImageUrls.push(url)
+                    } catch (e) {
+                        console.error("Failed to upload image", img.name, e)
+                    }
+                }
+            }
         }
 
+        // Build context from text files
+        let context = ''
+        if (textFiles.length > 0) {
+            context = textFiles.map(f => `[File: ${f.name}]\n${f.content}`).join('\n\n')
+        }
+
+        // Use textFiles content as context, but also use uploaded images for vision model
+        // We will send the message with metadata containing the image URLs
+
+        setPendingFiles([])
+
         // Send human message
-        await TeamService.sendMessage(activeThread.id, userMessage, 'human')
+        // If we have images, we pass them in metadata
+        const metadata = uploadedImageUrls.length > 0 ? { images: uploadedImageUrls } : {}
+
+        const sentMessage = await TeamService.sendMessage(activeThread.id, userMessage, 'human', undefined, metadata)
+        if (sentMessage) {
+            setMessages(prev => [...prev, sentMessage])
+        }
+
+        if (!askAI) {
+            setIsLoading(false)
+            return
+        }
 
         // Build AI prompt with context
         let fullPrompt = userMessage
@@ -386,10 +493,16 @@ export function TeamWorkspace() {
         setStreamingContent('')
 
         try {
-            const modelId = settings.aiSettings.preferredModelId ||
-                (settings.aiSettings.intelligenceMode === 'local'
-                    ? settings.aiSettings.ollamaModel
-                    : 'gpt-4o')
+            const modelId = QueryRouter.selectModel(
+                settings.aiSettings.intelligenceMode,
+                settings.aiSettings.preferredModelId,
+                {
+                    input: userMessage,
+                    attachmentCount: imageFiles.length + textFiles.length,
+                    toolsEnabled: true,
+                    hasImages: imageFiles.length > 0
+                }
+            )
 
             const modelInfo = ModelRegistry.getInstance().getModelById(modelId)
             const modelLabel = modelInfo?.displayName || modelId
@@ -399,16 +512,32 @@ export function TeamWorkspace() {
 
             // Convert team messages to AI conversation history
             // We take the last 15 messages for context to keep it snappy
-            const history: any[] = messages.slice(-15).map(m => ({
-                role: m.sender_type === 'model' ? 'assistant' : 'user',
-                content: m.sender_type === 'model' ? m.content : `${m.sender_name}: ${m.content}`
-            }))
+            const history: any[] = messages.slice(-15).map(m => {
+                // If message has images, we might want to include them in the history as well
+                // But for now, let's just handle text history + current message images
+                return {
+                    role: m.sender_type === 'model' ? 'assistant' : 'user',
+                    content: m.sender_type === 'model' ? m.content : `${m.sender_name}: ${m.content}`
+                }
+            })
 
-            // Add the current message with its context (vault + files)
-            history.push({
+            // Add the current message with its context (vault + files) and images
+            const currentMessage: any = {
                 role: 'user',
                 content: `(Current Message) ${fullPrompt}`
-            })
+            }
+
+            // Add images to the AI request if any were uploaded
+            // Note: We need the BASE64 content for 'parseImage' helper in AIService? 
+            // OR we can pass URLs if the provider supports it. 
+            // AIService supports base64 strings in `images` array.
+            // Since we have the `content` (dataURL) in pendingFiles (which we just cleared but have in `imageFiles`), we can use that.
+
+            if (imageFiles.length > 0) {
+                currentMessage.images = imageFiles.map(f => f.content) // These are DataURLs
+            }
+
+            history.push(currentMessage)
 
             // Add a system instruction hidden from UI but passed to AI
             const teamContextMsg = {
@@ -428,24 +557,30 @@ export function TeamWorkspace() {
             )
 
             // Send AI response as message
-            await TeamService.sendMessage(
+            const aiMessage = await TeamService.sendMessage(
                 activeThread.id,
                 fullResponse,
                 'model',
                 modelLabel,
                 { modelId }
             )
+            if (aiMessage) {
+                setMessages(prev => [...prev, aiMessage])
+            }
 
             setStreamingContent('')
         } catch (err: unknown) {
             if (err instanceof Error && err.name !== 'AbortError') {
                 console.error('AI error:', err)
-                await TeamService.sendMessage(
+                const errorMessage = await TeamService.sendMessage(
                     activeThread.id,
                     `Error: ${err.message}`,
                     'model',
                     'System'
                 )
+                if (errorMessage) {
+                    setMessages(prev => [...prev, errorMessage])
+                }
             }
         } finally {
             setIsLoading(false)
@@ -465,16 +600,39 @@ export function TeamWorkspace() {
         if (!files) return
 
         for (const file of Array.from(files)) {
+            // Validate size
+            if (file.size > 5 * 1024 * 1024) {
+                alert(`File ${file.name} too large. Max 5MB.`)
+                continue
+            }
+
             const reader = new FileReader()
             reader.onload = async (event) => {
                 const content = event.target?.result as string
+                // For images, content is Data URL. For text, we might want text.
+                // But generally preserving content for preview is good.
+
+                // If it's a text file, we might want the text content for RAG/Context
+                let processedContent = content;
+                if (!file.type.startsWith('image/')) {
+                    // Re-read as text if needed, but here we read as text initially?
+                    // The original code used readAsText.
+                    // IMPORTANT: For images we must read as DataURL.
+                }
+
                 setPendingFiles(prev => [...prev, {
                     name: file.name,
-                    content: content.slice(0, 10000), // Limit content
-                    type: file.type
+                    content: processedContent.slice(0, 100000), // Limit content size in state
+                    type: file.type,
+                    fileObject: file
                 }])
             }
-            reader.readAsText(file)
+
+            if (file.type.startsWith('image/')) {
+                reader.readAsDataURL(file)
+            } else {
+                reader.readAsText(file)
+            }
         }
         e.target.value = ''
     }
@@ -482,6 +640,42 @@ export function TeamWorkspace() {
     const removePendingFile = (index: number) => {
         setPendingFiles(prev => prev.filter((_, i) => i !== index))
     }
+
+    // Paste handling
+    useEffect(() => {
+        const handlePaste = async (e: ClipboardEvent) => {
+            const items = e.clipboardData?.items
+            if (!items) return
+
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile()
+                    if (!file) continue
+
+                    // Basic size check
+                    if (file.size > 5 * 1024 * 1024) {
+                        alert('Pasted image is too large (max 5MB)')
+                        continue
+                    }
+
+                    const reader = new FileReader()
+                    reader.onload = (e) => {
+                        const result = e.target?.result as string
+                        setPendingFiles(prev => [...prev, {
+                            name: `pasted-image-${Date.now()}.png`,
+                            content: result,
+                            type: file.type,
+                            fileObject: file
+                        }])
+                    }
+                    reader.readAsDataURL(file)
+                }
+            }
+        }
+
+        window.addEventListener('paste', handlePaste)
+        return () => window.removeEventListener('paste', handlePaste)
+    }, [])
 
     const handleVoiceToggle = async () => {
         if (isRecording) {
@@ -553,7 +747,32 @@ export function TeamWorkspace() {
     }
 
     return (
-        <div className="flex-1 flex h-full">
+        <div
+            className="flex-1 flex h-full relative"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={async (e) => {
+                e.preventDefault()
+                const files = Array.from(e.dataTransfer.files)
+                if (files.length === 0) return
+
+                for (const file of files) {
+                    // Check size
+                    if (file.size > 5 * 1024 * 1024) continue
+
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader()
+                        reader.onload = (e) => {
+                            const result = e.target?.result as string
+                            setPendingFiles(prev => [...prev, { name: file.name, content: result, type: file.type, fileObject: file }])
+                        }
+                        reader.readAsDataURL(file)
+                    } else {
+                        // Handle text files for context
+                        // ...
+                    }
+                }
+            }}
+        >
             {/* Team Sidebar */}
             <div className="w-64 glass-sidebar flex flex-col border-r border-white/10">
                 {/* Team Selector with Dropdown */}
@@ -652,20 +871,26 @@ export function TeamWorkspace() {
                                             Rename Team
                                         </button>
                                         <button
-                                            onClick={() => { setShowTeamMenu(false); handleDeleteTeam() }}
-                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-red-500/10 rounded text-red-400"
+                                            onClick={() => handleDeleteTeam()}
+                                            className={cn(
+                                                "w-full flex items-center gap-2 px-3 py-2 text-sm rounded transition-colors",
+                                                teamDeleteConfirm ? "bg-red-500 text-white" : "hover:bg-red-500/10 text-red-400"
+                                            )}
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
-                                            Delete Team
+                                            {teamDeleteConfirm ? "CONFIRM DELETE TEAM" : "Delete Team"}
                                         </button>
                                     </>
                                 ) : (
                                     <button
-                                        onClick={() => { setShowTeamMenu(false); handleLeaveTeam() }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-red-500/10 rounded text-red-400"
+                                        onClick={() => handleLeaveTeam()}
+                                        className={cn(
+                                            "w-full flex items-center gap-2 px-3 py-2 text-sm rounded transition-colors",
+                                            teamLeaveConfirm ? "bg-red-500 text-white" : "hover:bg-red-500/10 text-red-400"
+                                        )}
                                     >
                                         <LogOut className="h-3.5 w-3.5" />
-                                        Leave Team
+                                        {teamLeaveConfirm ? "CONFIRM LEAVE TEAM" : "Leave Team"}
                                     </button>
                                 )}
                                 <button
@@ -725,42 +950,72 @@ export function TeamWorkspace() {
                                     />
                                 </div>
                             ) : (
-                                <div className="flex items-center gap-1 group/item">
+                                <div className="group/item flex items-center gap-1 hover:bg-white/5 rounded-lg transition-colors pr-1">
                                     <button
                                         onClick={() => setActiveThread(thread)}
                                         className={cn(
-                                            "flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors",
+                                            "flex-1 flex items-center gap-2 px-3 py-2 text-left transition-colors min-w-0 rounded-l-lg",
                                             activeThread?.id === thread.id
                                                 ? "bg-[rgb(var(--accent-rgb))]/20 text-[rgb(var(--accent-rgb))]"
-                                                : "hover:bg-white/5 text-foreground/70"
+                                                : "text-foreground/70"
                                         )}
                                     >
-                                        <Hash className="h-4 w-4" />
+                                        <Hash className="h-4 w-4 shrink-0" />
                                         <span className="truncate text-sm">{thread.name}</span>
                                     </button>
 
-                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                    <div className={cn(
+                                        "flex items-center gap-0.5 transition-opacity",
+                                        deleteConfirmId === thread.id ? "opacity-100" : "opacity-0 group-hover/item:opacity-100"
+                                    )}>
                                         {(isOwner || thread.created_by === currentUserId) && (
                                             <>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        setEditingThreadId(thread.id)
-                                                        setEditThreadName(thread.name)
-                                                    }}
-                                                    className="p-1 rounded hover:bg-white/10 text-foreground/40 hover:text-foreground/70"
-                                                >
-                                                    <Pencil className="h-3 w-3" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        handleDeleteThread(thread.id, thread.name)
-                                                    }}
-                                                    className="p-1 rounded hover:bg-red-500/10 text-foreground/40 hover:text-red-400"
-                                                >
-                                                    <Trash2 className="h-3 w-3" />
-                                                </button>
+                                                {deleteConfirmId === thread.id ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                handleDeleteThread(thread.id)
+                                                            }}
+                                                            className="p-1 px-2 rounded-md bg-red-500 text-white text-[10px] font-bold hover:bg-red-600 transition-colors"
+                                                        >
+                                                            CONFIRM
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                setDeleteConfirmId(null)
+                                                            }}
+                                                            className="p-1 rounded-md hover:bg-white/10 text-foreground/40 hover:text-foreground/70"
+                                                        >
+                                                            <X className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                setEditingThreadId(thread.id)
+                                                                setEditThreadName(thread.name)
+                                                            }}
+                                                            className="p-1.5 rounded-md hover:bg-white/10 text-foreground/40 hover:text-foreground/70 transition-colors"
+                                                            title="Rename thread"
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                handleDeleteThread(thread.id)
+                                                            }}
+                                                            className="p-1.5 rounded-md hover:bg-red-500/10 text-foreground/40 hover:text-red-400 transition-colors"
+                                                            title="Delete thread"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </>
+                                                )}
                                             </>
                                         )}
                                     </div>
@@ -848,11 +1103,16 @@ export function TeamWorkspace() {
                                             {member.role === 'admin' ? <ShieldAlert className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
                                         </button>
                                         <button
-                                            onClick={() => handleRemoveMember(member.user_id, member.profile?.username || 'this member')}
-                                            className="p-1 rounded hover:bg-red-500/20 text-red-400 transition-opacity"
+                                            onClick={() => handleRemoveMember(member.user_id)}
+                                            className={cn(
+                                                "p-1 rounded transition-colors",
+                                                memberRemoveConfirmId === member.user_id
+                                                    ? "bg-red-500 text-white px-2"
+                                                    : "hover:bg-red-500/20 text-red-400"
+                                            )}
                                             title="Remove from Team"
                                         >
-                                            <X className="h-3 w-3" />
+                                            {memberRemoveConfirmId === member.user_id ? <span className="text-[9px] font-bold">CONFIRM</span> : <X className="h-3 w-3" />}
                                         </button>
                                     </div>
                                 )}
@@ -865,7 +1125,7 @@ export function TeamWorkspace() {
             {/* Chat Area */}
             <div className="flex-1 flex flex-col">
                 {/* Thread Header */}
-                <div className="h-14 glass border-b border-white/10 flex items-center justify-between px-4">
+                <div className="h-14 glass border-b border-white/10 flex items-center justify-between px-4 relative z-50">
                     <div className="flex items-center gap-2">
                         <Hash className="h-5 w-5 text-[rgb(var(--accent-rgb))]" />
                         <span className="font-semibold">{activeThread?.name || 'Select a thread'}</span>
@@ -968,7 +1228,7 @@ export function TeamWorkspace() {
                         <button
                             onClick={() => setUseTeamVault(!useTeamVault)}
                             className={cn(
-                                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-nowrap",
                                 useTeamVault
                                     ? "bg-[rgb(var(--accent-rgb))]/20 text-[rgb(var(--accent-rgb))] border border-[rgb(var(--accent-rgb))]/30"
                                     : "glass text-foreground/60"
@@ -977,13 +1237,31 @@ export function TeamWorkspace() {
                             <Brain className="h-3.5 w-3.5" />
                             Team Vault
                         </button>
+
+                        <button
+                            onClick={() => setAskAI(!askAI)}
+                            className={cn(
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-nowrap",
+                                askAI
+                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                                    : "glass text-foreground/60"
+                            )}
+                        >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Ask AI
+                        </button>
                     </div>
                 </div>
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {messages.map(msg => (
-                        <MessageBubble key={msg.id} message={msg} theme={settings.theme} />
+                        <MessageBubble
+                            key={msg.id}
+                            message={msg}
+                            currentUserId={currentUserId}
+                            onToggleReaction={handleToggleReaction}
+                        />
                     ))}
 
                     {/* Streaming message */}
@@ -1027,7 +1305,7 @@ export function TeamWorkspace() {
                         {/* File Upload */}
                         <label className="p-2 rounded-lg glass hover:bg-white/10 cursor-pointer transition-colors">
                             <Paperclip className="h-5 w-5 text-foreground/60" />
-                            <input type="file" className="hidden" multiple onChange={handleFileUpload} />
+                            <input type="file" className="hidden" multiple accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif" onChange={handleFileUpload} />
                         </label>
 
                         {/* Voice */}
@@ -1117,9 +1395,14 @@ export function TeamWorkspace() {
                                                 </div>
                                                 <button
                                                     onClick={() => handleDeleteVaultSource(source)}
-                                                    className="p-2 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 rounded-lg transition-all"
+                                                    className={cn(
+                                                        "p-2 rounded-lg transition-all flex items-center gap-1",
+                                                        vaultSourceDeleteConfirm === source
+                                                            ? "bg-red-500 text-white opacity-100"
+                                                            : "text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/10"
+                                                    )}
                                                 >
-                                                    <Trash className="h-4 w-4" />
+                                                    {vaultSourceDeleteConfirm === source ? <span className="text-xs font-bold">CONFIRM</span> : <Trash className="h-4 w-4" />}
                                                 </button>
                                             </div>
                                         ))}
@@ -1144,15 +1427,39 @@ export function TeamWorkspace() {
 interface MessageBubbleProps {
     message: TeamMessage
     theme: string
+    currentUserId: string | null
+    onToggleReaction: (messageId: string, emoji: string) => void
 }
 
-function MessageBubble({ message, theme }: MessageBubbleProps) {
+function MessageBubble({ message, currentUserId, onToggleReaction }: Omit<MessageBubbleProps, 'theme'>) {
     const isHuman = message.sender_type === 'human'
-    const isAgent = message.sender_type === 'agent'
+    const [isCopied, setIsCopied] = useState(false)
+    const [isSpeaking, setIsSpeaking] = useState(false)
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(message.content)
+        setIsCopied(true)
+        setTimeout(() => setIsCopied(false), 2000)
+    }
+
+    const handleSpeak = async () => {
+        if (isSpeaking) {
+            textToSpeechService.stop()
+            setIsSpeaking(false)
+            return
+        }
+
+        setIsSpeaking(true)
+        await textToSpeechService.speak(message.content)
+        setIsSpeaking(false)
+    }
+
+    const reactions = message.metadata?.reactions || {}
+    const hasReactions = Object.keys(reactions).length > 0
 
     return (
         <div className={cn(
-            "flex gap-3",
+            "flex gap-3 group/msg",
             isHuman ? "flex-row-reverse" : "flex-row"
         )}>
             <Avatar className="h-8 w-8 flex-shrink-0 border border-white/10">
@@ -1168,31 +1475,107 @@ function MessageBubble({ message, theme }: MessageBubbleProps) {
             </Avatar>
 
             <div className={cn(
-                "px-4 py-3 rounded-2xl max-w-[85%] shadow-lg",
-                isHuman ? "glass-message-user" : "glass-message"
+                "px-4 py-3 rounded-2xl max-w-[85%] relative group/bubble",
+                isHuman ? "glass text-white" : "glass-sidebar border-white/5",
+                message.sender_type === 'model' && "border-primary-accent/30"
             )}>
-                {/* Sender label */}
-                <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-semibold text-foreground/60">
+                <div className="flex items-center justify-between mb-1 gap-4">
+                    <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
                         {message.sender_name}
                     </span>
-                    {message.sender_type !== 'human' && (
-                        <span className={cn(
-                            "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                            isAgent ? "bg-purple-500/20 text-purple-400" : "bg-blue-500/20 text-blue-400"
-                        )}>
-                            {isAgent ? 'Agent' : 'AI'}
-                        </span>
-                    )}
+                    <span className="text-[10px] opacity-30">
+                        {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                 </div>
 
-                <div className={cn(
-                    "prose prose-sm max-w-none break-words",
-                    (theme === 'dark' || theme.startsWith('glass')) ? "prose-invert" : "prose-zinc"
-                )}>
+                {/* Reactions Display - Moved to TOP as requested */}
+                {hasReactions && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                        {Object.entries(reactions).map(([emoji, users]) => {
+                            const userList = users as string[]
+                            if (userList.length === 0) return null
+                            const hasReacted = userList.includes(currentUserId || '')
+
+                            return (
+                                <button
+                                    key={emoji}
+                                    onClick={() => onToggleReaction(message.id, emoji)}
+                                    className={cn(
+                                        "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border transition-all",
+                                        hasReacted
+                                            ? "bg-accent/20 border-accent/40 text-accent"
+                                            : "bg-white/5 border-white/10 text-foreground/60 hover:bg-white/10"
+                                    )}
+                                >
+                                    <span>{emoji}</span>
+                                    <span className="font-bold">{userList.length}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
+                )}
+                <div className="prose prose-sm max-w-none prose-invert break-words">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {message.content}
                     </ReactMarkdown>
+
+                    {/* Message Actions - Moved to BOTTOM as requested */}
+                    <div className={cn(
+                        "flex gap-1 mt-3 mb-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity justify-end",
+                        isHuman ? "flex-row-reverse" : "flex-row"
+                    )}>
+                        <button
+                            onClick={handleCopy}
+                            className="p-1 px-2 rounded-md bg-black/40 hover:bg-black/60 border border-white/10 text-white/50 hover:text-white transition-all flex items-center gap-1.5"
+                            title="Copy message"
+                        >
+                            {isCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+                            <span className="text-[9px] font-bold uppercase tracking-wider">Copy</span>
+                        </button>
+                        {!isHuman && (
+                            <button
+                                onClick={handleSpeak}
+                                className={cn(
+                                    "p-1 px-2 rounded-md border border-white/10 transition-all flex items-center gap-1.5",
+                                    isSpeaking
+                                        ? "bg-primary-accent text-white shadow-lg shadow-primary-accent/40"
+                                        : "bg-black/40 hover:bg-black/60 text-white/50 hover:text-white"
+                                )}
+                                title={isSpeaking ? "Stop speaking" : "Speak message"}
+                            >
+                                <Volume2 className={cn("h-3 w-3", isSpeaking && "animate-pulse")} />
+                                <span className="text-[9px] font-bold uppercase tracking-wider">{isSpeaking ? 'Stop' : 'Speak'}</span>
+                            </button>
+                        )}
+                        <button
+                            onClick={() => onToggleReaction(message.id, '👍')}
+                            className={cn(
+                                "p-1 px-2 rounded-md border border-white/10 transition-all flex items-center gap-1.5",
+                                (reactions['👍'] || []).includes(currentUserId || '')
+                                    ? "bg-accent/20 text-accent border-accent/40"
+                                    : "bg-black/40 hover:bg-black/60 text-white/50 hover:text-white"
+                            )}
+                            title="React with Like"
+                        >
+                            <Smile className="h-3 w-3" />
+                            <span className="text-[9px] font-bold uppercase tracking-wider">Like</span>
+                        </button>
+                    </div>
+
+                    {/* Display Images from Metadata */}
+                    {message.metadata?.images && Array.isArray(message.metadata.images) && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                            {message.metadata.images.map((url: string, i: number) => (
+                                <img
+                                    key={i}
+                                    src={url}
+                                    alt="Shared asset"
+                                    className="max-w-full max-h-[300px] rounded-lg border border-white/10 object-contain hover:scale-105 transition-transform cursor-pointer"
+                                    onClick={() => window.open(url, '_blank')}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <span className="text-[10px] text-foreground/40 font-medium block mt-2">

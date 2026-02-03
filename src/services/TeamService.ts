@@ -293,15 +293,24 @@ export const TeamService = {
      * Delete a thread
      */
     deleteThread: async (threadId: string): Promise<void> => {
+        console.log('[TeamService] Attempting to delete thread with ID:', threadId)
         const supabase = SupabaseService.getClient()
-        if (!supabase) throw new Error('Supabase not initialized')
+        if (!supabase) {
+            console.error('[TeamService] Supabase client not found')
+            throw new Error('Supabase not initialized')
+        }
 
-        const { error } = await supabase
+        const { error, count } = await supabase
             .from('team_threads')
-            .delete()
+            .delete({ count: 'exact' })
             .eq('id', threadId)
 
-        if (error) throw error
+        if (error) {
+            console.error('[TeamService] Supabase delete error:', error)
+            throw error
+        }
+
+        console.log('[TeamService] Delete operation completed. Rows affected:', count)
     },
 
     // ============ MESSAGES ============
@@ -369,6 +378,21 @@ export const TeamService = {
             return []
         }
         return data || []
+    },
+
+    /**
+     * Update message metadata (useful for reactions, etc)
+     */
+    updateMessageMetadata: async (messageId: string, metadata: Record<string, any>): Promise<void> => {
+        const supabase = SupabaseService.getClient()
+        if (!supabase) throw new Error('Supabase not initialized')
+
+        const { error } = await supabase
+            .from('team_messages')
+            .update({ metadata })
+            .eq('id', messageId)
+
+        if (error) throw error
     },
 
     /**
@@ -527,5 +551,31 @@ export const TeamService = {
             .upsert({ id: user.id, ...updates })
 
         if (error) throw error
+    },
+
+    /**
+     * Upload an asset for a team thread
+     */
+    uploadTeamAsset: async (teamId: string, file: File): Promise<string> => {
+        const supabase = SupabaseService.getClient()
+        if (!supabase) throw new Error('Supabase not initialized')
+
+        const user = (await supabase.auth.getUser()).data.user
+        if (!user) throw new Error('Must be signed in to upload assets')
+
+        // Sanitize filename
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+        const path = `${teamId}/${Date.now()}-${sanitizedName}` // Organize by team
+
+        // Try upload to team-assets bucket
+        try {
+            await SupabaseService.uploadFile('team-assets', path, file)
+            const publicUrl = SupabaseService.getPublicUrl('team-assets', path)
+            if (!publicUrl) throw new Error('Failed to get public URL')
+            return publicUrl
+        } catch (error) {
+            console.error('Failed to upload team asset:', error)
+            throw error
+        }
     }
 }

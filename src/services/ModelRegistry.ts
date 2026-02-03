@@ -22,6 +22,9 @@ export class ModelRegistry {
     private static instance: ModelRegistry
     private models: ModelDefinition[] = []
 
+    public static readonly CORE_CHAT_MODEL = 'hymetalab/lumora-lite'
+    public static readonly CORE_EMBED_MODEL = 'nomic-embed-text'
+
     private constructor() {
         this.initializeStaticModels()
     }
@@ -32,6 +35,8 @@ export class ModelRegistry {
         }
         return ModelRegistry.instance
     }
+
+    public isOllamaReachable = false
 
     private initializeStaticModels() {
         // Cloud Models (Static List - can be updated via API later)
@@ -182,9 +187,11 @@ export class ModelRegistry {
 
             if (!response.ok) {
                 console.error('[ModelRegistry] Ollama API returned non-OK status:', response.status)
+                this.isOllamaReachable = false
                 return
             }
 
+            this.isOllamaReachable = true
             const data: any = await response.json()
             console.log('[ModelRegistry] Ollama response:', data)
 
@@ -195,7 +202,10 @@ export class ModelRegistry {
                 type: 'local',
                 capabilities: {
                     tools: m.name.includes('llama3') || m.name.includes('mistral') || m.name.includes('command-r'),
-                    vision: m.name.includes('llava') || m.name.includes('moondream'),
+                    vision: m.name.toLowerCase().includes('llava') ||
+                        m.name.toLowerCase().includes('moondream') ||
+                        m.name.toLowerCase().includes('vision') ||
+                        m.name.toLowerCase().includes('minicpm'),
                     streaming: true,
                     maxTokens: 4096 // Default for many local models
                 },
@@ -211,6 +221,7 @@ export class ModelRegistry {
             ]
         } catch (e) {
             console.error('[ModelRegistry] Failed to sync Ollama models:', e)
+            this.isOllamaReachable = false
         }
     }
 

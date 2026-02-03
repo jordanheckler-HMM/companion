@@ -13,6 +13,7 @@ export interface Message {
   status?: 'thinking' | 'done' | 'error'
   modelId?: string
   modelLabel?: string
+  images?: string[]
 }
 
 export interface SupabaseConfig {
@@ -246,6 +247,9 @@ interface AppState {
   showSettings: boolean
   setShowSettings: (show: boolean) => void
 
+  showOnboarding: boolean
+  setShowOnboarding: (show: boolean) => void
+
   // Supabase State
   supabaseSession: Session | null
   setSupabaseSession: (session: Session | null) => void
@@ -339,7 +343,7 @@ const storage: StateStorage = {
 // Create the store with persistence
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // View management
       currentView: 'home',
       setCurrentView: (view) => set({ currentView: view }),
@@ -400,10 +404,13 @@ export const useStore = create<AppState>()(
         }))
         return id
       },
-      removeFile: (id) =>
+      removeFile: (id) => {
         set((state) => ({
           files: state.files.filter((f) => f.id !== id),
-        })),
+        }))
+        // Automatically cleanup knowledge chunks if they exist
+        get().removeKnowledgeChunksByFileId(id)
+      },
       updateFile: (id, updates) =>
         set((state) => ({
           files: state.files.map((f) =>
@@ -570,6 +577,9 @@ export const useStore = create<AppState>()(
       showSettings: false,
       setShowSettings: (show) => set({ showSettings: show }),
 
+      showOnboarding: true,
+      setShowOnboarding: (show) => set({ showOnboarding: show }),
+
       // Supabase State
       supabaseSession: null,
       setSupabaseSession: (session) => set({ supabaseSession: session }),
@@ -651,6 +661,7 @@ export const useStore = create<AppState>()(
         agents: state.agents,
         automations: state.automations,
         vaultPath: state.vaultPath,
+        showOnboarding: state.showOnboarding,
       }),
       // Deep merge to preserve nested aiSettings fields (like API keys)
       merge: (persistedState: any, currentState: AppState) => {

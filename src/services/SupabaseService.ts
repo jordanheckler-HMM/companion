@@ -92,6 +92,30 @@ export const SupabaseService = {
     },
 
     /**
+     * Storage Methods
+     */
+    uploadFile: async (bucket: string, path: string, file: File) => {
+        if (!supabase) throw new Error('Supabase not initialized')
+
+        // Ensure unique path if needed, but for now strict path
+        const { data, error } = await supabase.storage
+            .from(bucket)
+            .upload(path, file, {
+                cacheControl: '3600',
+                upsert: false
+            })
+
+        if (error) throw error
+        return data
+    },
+
+    getPublicUrl: (bucket: string, path: string) => {
+        if (!supabase) return null
+        const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+        return data.publicUrl
+    },
+
+    /**
      * Utility to check if configured
      */
     isConfigured: () => {

@@ -1,4 +1,4 @@
-import { FileText, Download, Eye, Trash2, Edit } from 'lucide-react'
+import { FileText, Download, Eye, Trash2, Edit, Image as ImageIcon, FileCode, Film, Music, File } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useRef } from 'react'
 
@@ -25,12 +25,13 @@ export function FileCard({
   onDelete,
 }: FileCardProps) {
   const getFileIcon = () => {
-    if (type.includes('image')) return '🖼️'
-    if (type.includes('pdf')) return '📄'
-    if (type.includes('video')) return '🎥'
-    if (type.includes('audio')) return '🎵'
-    if (type.includes('code') || type.includes('text')) return '💾'
-    return '📁'
+    const iconClass = "h-8 w-8 text-[rgb(var(--accent-rgb))]"
+    if (type.includes('image')) return <ImageIcon className={iconClass} />
+    if (type.includes('pdf')) return <FileText className={iconClass} />
+    if (type.includes('video')) return <Film className={iconClass} />
+    if (type.includes('audio')) return <Music className={iconClass} />
+    if (type.includes('code') || type.includes('text')) return <FileCode className={iconClass} />
+    return <File className={iconClass} />
   }
 
   return (
@@ -46,27 +47,27 @@ export function FileCard({
           <h3 className="font-semibold text-foreground truncate mb-1">
             {filename}
           </h3>
-          <div className="flex gap-3 text-xs text-muted-foreground">
-            <span>{size}</span>
-            <span>•</span>
-            <span>{type}</span>
-            <span>•</span>
-            <span>{lastModified}</span>
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+            <span className="whitespace-nowrap">{size}</span>
+            <span className="opacity-30">•</span>
+            <span className="truncate max-w-[150px]" title={type}>{type}</span>
+            <span className="opacity-30">•</span>
+            <span className="whitespace-nowrap">{lastModified}</span>
           </div>
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <div className="flex items-center gap-1 mt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200 overflow-hidden">
         {onView && (
           <Button
             variant="ghost"
             size="sm"
-            className="glass-hover flex-1 min-w-[70px] h-8 px-2"
+            className="flex-1 glass-hover h-8 px-2 min-w-0"
             onClick={onView}
           >
-            <Eye className="h-3.5 w-3.5 mr-1" />
-            <span className="text-[10px]">View</span>
+            <Eye className="h-3 w-3 mr-1 flex-shrink-0" />
+            <span className="text-[10px] truncate">View</span>
           </Button>
         )}
 
@@ -74,11 +75,11 @@ export function FileCard({
           <Button
             variant="ghost"
             size="sm"
-            className="glass-hover flex-1 min-w-[70px] h-8 px-2"
+            className="flex-1 glass-hover h-8 px-2 min-w-0"
             onClick={onEdit}
           >
-            <Edit className="h-3.5 w-3.5 mr-1" />
-            <span className="text-[10px]">Edit</span>
+            <Edit className="h-3 w-3 mr-1 flex-shrink-0" />
+            <span className="text-[10px] truncate">Edit</span>
           </Button>
         )}
 
@@ -86,11 +87,11 @@ export function FileCard({
           <Button
             variant="ghost"
             size="sm"
-            className="glass-hover flex-1 min-w-[85px] h-8 px-2"
+            className="flex-1 glass-hover h-8 px-2 min-w-0"
             onClick={onDownload}
           >
-            <Download className="h-3.5 w-3.5 mr-1" />
-            <span className="text-[10px]">Download</span>
+            <Download className="h-3 w-3 mr-1 flex-shrink-0" />
+            <span className="text-[10px] truncate">Download</span>
           </Button>
         )}
 
@@ -98,11 +99,11 @@ export function FileCard({
           <Button
             variant="ghost"
             size="sm"
-            className="glass-hover flex-1 min-w-[75px] h-8 px-2 text-destructive hover:text-destructive"
+            className="flex-1 glass-hover h-8 px-2 min-w-0 text-red-400 hover:text-red-500 hover:bg-red-500/10"
             onClick={onDelete}
           >
-            <Trash2 className="h-3.5 w-3.5 mr-1" />
-            <span className="text-[10px]">Delete</span>
+            <Trash2 className="h-3 w-3 mr-1 flex-shrink-0" />
+            <span className="text-[10px] truncate">Delete</span>
           </Button>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { readTextFile, readFile } from '@tauri-apps/plugin-fs'
-import { Send, PaperclipIcon as Paperclip, X, FileEdit, Trash2, Database, Cloud, Home, Square, ChevronDown, Sparkles, Mic, MicOff, Brain } from 'lucide-react'
+import { Send, PaperclipIcon as Paperclip, X, FileEdit, Database, Cloud, Home, Square, ChevronDown, Sparkles, Mic, MicOff, Brain, Copy, Check, Volume2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import { RAGService } from '@/services/ragService'
 import { QueryRouter } from '@/services/QueryRouter'
 import { ModelRegistry } from '@/services/ModelRegistry'
 import { OllamaInstaller } from './OllamaInstaller'
+import { OnboardingGuide } from './OnboardingGuide'
 import { useStore } from '@/store'
 import { getDocument } from 'pdfjs-dist'
 import mammoth from 'mammoth'
@@ -32,6 +33,7 @@ interface Message {
   status?: 'thinking' | 'done' | 'error'
   modelId?: string
   modelLabel?: string
+  images?: string[]
 }
 
 interface MessageBubbleProps {
@@ -40,12 +42,32 @@ interface MessageBubbleProps {
 
 function MessageBubble({ message }: MessageBubbleProps) {
   const { settings } = useStore()
+  const [isCopied, setIsCopied] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
   const isUser = message.role === 'user'
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content)
+    setIsCopied(true)
+    setTimeout(() => setIsCopied(false), 2000)
+  }
+
+  const handleSpeak = async () => {
+    if (isSpeaking) {
+      textToSpeechService.stop()
+      setIsSpeaking(false)
+      return
+    }
+
+    setIsSpeaking(true)
+    await textToSpeechService.speak(message.content)
+    setIsSpeaking(false)
+  }
 
   return (
     <div
       className={cn(
-        'flex gap-3 mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300',
+        'flex gap-3 mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300 group',
         isUser ? 'flex-row-reverse' : 'flex-row'
       )}
     >
@@ -70,7 +92,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
       <div
         className={cn(
-          'px-4 py-3 rounded-2xl max-w-[85%] shadow-lg transition-all duration-200 relative overflow-hidden',
+          'px-4 py-3 rounded-2xl max-w-[85%] shadow-lg transition-all duration-200 relative overflow-hidden group/bubble',
           isUser ? 'glass-message-user' : 'glass-message',
           !isUser && message.status === 'thinking' && 'animate-shimmer'
         )}
@@ -80,6 +102,19 @@ function MessageBubble({ message }: MessageBubbleProps) {
             <div className="w-2 h-2 rounded-full bg-foreground/60 animate-thinking-dot" />
             <div className="w-2 h-2 rounded-full bg-foreground/60 animate-thinking-dot" style={{ animationDelay: '0.2s' }} />
             <div className="w-2 h-2 rounded-full bg-foreground/60 animate-thinking-dot" style={{ animationDelay: '0.4s' }} />
+          </div>
+        )}
+
+        {message.images && message.images.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {message.images.map((img, i) => (
+              <img
+                key={i}
+                src={img}
+                alt="User upload"
+                className="max-w-full max-h-[300px] rounded-lg border border-white/10 object-contain"
+              />
+            ))}
           </div>
         )}
 
@@ -93,6 +128,36 @@ function MessageBubble({ message }: MessageBubbleProps) {
             </ReactMarkdown>
           </div>
         )}
+
+        {/* Message Actions - Now below the message */}
+        <div className={cn(
+          "flex gap-1 mt-2 mb-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity justify-end",
+          isUser ? "flex-row-reverse" : "flex-row"
+        )}>
+          <button
+            onClick={handleCopy}
+            className="p-1 px-2 rounded-md bg-black/40 hover:bg-black/60 border border-white/10 text-white/50 hover:text-white transition-all flex items-center gap-1.5"
+            title="Copy message"
+          >
+            {isCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+            <span className="text-[10px] font-bold uppercase tracking-wider">Copy</span>
+          </button>
+          {!isUser && (
+            <button
+              onClick={handleSpeak}
+              className={cn(
+                "p-1 px-2 rounded-md border border-white/10 transition-all flex items-center gap-1.5",
+                isSpeaking
+                  ? "bg-primary-accent text-white shadow-lg shadow-primary-accent/40"
+                  : "bg-black/40 hover:bg-black/60 text-white/50 hover:text-white"
+              )}
+              title={isSpeaking ? "Stop speaking" : "Speak message"}
+            >
+              <Volume2 className={cn("h-3 w-3", isSpeaking && "animate-pulse")} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">{isSpeaking ? 'Stop' : 'Speak'}</span>
+            </button>
+          )}
+        </div>
         <div className="flex items-center justify-between mt-2 gap-4">
           <span className="text-[10px] text-foreground/40 font-medium block">
             {new Date(message.timestamp).toLocaleTimeString([], {
@@ -133,12 +198,13 @@ export function ChatWindow() {
     updateMessage,
     clearMessages,
     knowledgeBase,
-    clearKnowledgeBase,
+    files,
     pendingContext,
     removePendingContext,
     clearPendingContext,
     availableModels,
-    setAvailableModels
+    setAvailableModels,
+    showOnboarding
   } = useStore()
 
   const [useVault, setUseVault] = useState(settings.aiSettings.enableVaultRAG || false)
@@ -146,7 +212,7 @@ export function ChatWindow() {
   const [input, setInput] = useState('')
 
   const [isLoading, setIsLoading] = useState(false)
-  const [pendingFiles, setPendingFiles] = useState<Array<{ name: string; content: string }>>([])
+  const [pendingFiles, setPendingFiles] = useState<Array<{ name: string; content: string; type?: 'file' | 'image' }>>([])
   const [editorMode, setEditorMode] = useState<{
     active: boolean
     content: string
@@ -196,6 +262,37 @@ export function ChatWindow() {
       scrollToBottom('auto')
     }
   }, [messages])
+
+  // Paste handling
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (!file) continue
+
+          // Basic size check
+          if (file.size > 5 * 1024 * 1024) {
+            addMessage({ role: 'assistant', content: 'Pasted image is too large (max 5MB)' })
+            continue
+          }
+
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            const result = e.target?.result as string
+            setPendingFiles(prev => [...prev, { name: `pasted-image-${Date.now()}.png`, content: result, type: 'image' }])
+          }
+          reader.readAsDataURL(file)
+        }
+      }
+    }
+
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [])
 
 
   useEffect(() => {
@@ -257,22 +354,30 @@ export function ChatWindow() {
       }
     }
 
-    // Add user message if there's text
-    if (fullUserMessage) {
-      addMessage({
-        content: fullUserMessage,
-        role: 'user'
-      })
-    }
+    // Separate images and text files
+    const imageFiles = pendingFiles.filter(f => f.type === 'image' || f.name.match(/\.(png|jpg|jpeg|webp|gif)$/i))
+    const textFiles = pendingFiles.filter(f => f.type !== 'image' && !f.name.match(/\.(png|jpg|jpeg|webp|gif)$/i))
 
-    // Add file attachment messages
-    if (pendingFiles.length > 0) {
-      for (const file of pendingFiles) {
+    // Add file attachment messages (text files)
+    if (textFiles.length > 0) {
+      for (const file of textFiles) {
         addMessage({
           role: 'user',
           content: `Attached file: ** ${file.name}** (Session Only)`
         })
       }
+    }
+
+    // Add User Message with Image Attachments
+    // Note: If we have images but no text, we still create a user message
+    if (fullUserMessage || imageFiles.length > 0) {
+      addMessage({
+        content: fullUserMessage,
+        role: 'user',
+        images: imageFiles.map(f => f.content)
+      })
+    } else if (textFiles.length > 0 && !fullUserMessage) {
+      // Just text attachments, no user message body -> do nothing extra, attachments handled above
     }
 
     // Clear pending context after collecting prompts
@@ -305,7 +410,8 @@ export function ChatWindow() {
         {
           input: fullUserMessage,
           attachmentCount: pendingFiles.length,
-          toolsEnabled: true // Simplified for routing
+          toolsEnabled: true, // Simplified for routing
+          hasImages: imageFiles.length > 0
         }
       )
 
@@ -321,19 +427,28 @@ export function ChatWindow() {
           : ''
       }
 
-      // Add pending file content to context
-      if (pendingFiles.length > 0) {
-        const fileContext = pendingFiles.map(f => `--- ATTACHED FILE: ${f.name} ---\n${f.content}\n------------------`).join('\n\n')
+      // Add pending file content to context (Text files only)
+      if (textFiles.length > 0) {
+        const fileContext = textFiles.map(f => `--- ATTACHED FILE: ${f.name} ---\n${f.content}\n------------------`).join('\n\n')
         contextText += `\n\nAttached files for this conversation:\n${fileContext}`
       }
 
       const conversationHistory = [
         { role: 'system' as const, content: settings.systemPrompt + contextText },
         ...messages.concat(
-          fullUserMessage ? [{ id: 'temp-user', content: fullUserMessage, role: 'user', timestamp: new Date() }] : []
+          (fullUserMessage || imageFiles.length > 0)
+            ? [{
+              id: 'temp-user',
+              content: fullUserMessage,
+              role: 'user',
+              timestamp: new Date(),
+              images: imageFiles.map(f => f.content)
+            }]
+            : []
         ).map(m => ({
           role: m.role,
           content: m.content,
+          images: m.images
         }))
       ]
 
@@ -364,6 +479,11 @@ export function ChatWindow() {
 
         fullContent = cleanContent.trim()
 
+        // 5. Remove wrapping parentheses if the model outputs thoughts in them (common in some local models)
+        if (fullContent.length > 2 && fullContent.startsWith('(') && fullContent.endsWith(')')) {
+          fullContent = fullContent.slice(1, -1).trim()
+        }
+
         // Update UI based on current state
         const displayContent = thinkingContent && isThinking
           ? `*Thinking...*\n\n${thinkingContent}`
@@ -371,7 +491,7 @@ export function ChatWindow() {
 
         // Keep status as 'thinking' while stream is active
         updateMessage(assistantMessageId, displayContent, 'thinking', selectedModelId, modelLabel)
-      }, selectedModelId)
+      }, selectedModelId, controller.signal)
 
       if (!fullContent && !thinkingContent) {
         updateMessage(assistantMessageId, 'No response received', 'error')
@@ -416,11 +536,11 @@ export function ChatWindow() {
     if (!file) return
 
     // Validate file type
-    const validTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-    if (!validTypes.includes(file.type) && !file.name.match(/\.(pdf|txt|md|docx)$/i)) {
+    const validTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/png', 'image/jpeg', 'image/webp', 'image/gif']
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(pdf|txt|md|docx|png|jpg|jpeg|webp|gif)$/i)) {
       addMessage({
         role: 'assistant',
-        content: `Invalid file type. Please upload PDF, TXT, MD, or DOCX files only.`
+        content: `Invalid file type. Please upload PDF, TXT, MD, DOCX, or Images.`
       })
       if (fileInputRef.current) fileInputRef.current.value = ''
       return
@@ -451,12 +571,23 @@ export function ChatWindow() {
         const arrayBuffer = await file.arrayBuffer()
         const result = await mammoth.extractRawText({ arrayBuffer })
         content = result.value
+      } else if (file.type.startsWith('image/')) {
+        // Image handling
+        const reader = new FileReader()
+        content = await new Promise<string>((resolve) => {
+          reader.onload = (e) => resolve(e.target?.result as string)
+          reader.readAsDataURL(file)
+        })
       } else {
         content = await file.text()
       }
 
       // Add to pending files (not sent yet)
-      setPendingFiles(prev => [...prev, { name: file.name, content }])
+      setPendingFiles(prev => [...prev, {
+        name: file.name,
+        content,
+        type: file.type.startsWith('image/') ? 'image' : 'file'
+      }])
     } catch (error) {
       console.error('File processing error:', error)
       addMessage({
@@ -539,7 +670,7 @@ export function ChatWindow() {
   }
 
   const handleEditorUpload = (content: string, fileName: string) => {
-    setPendingFiles(prev => [...prev, { name: fileName, content }])
+    setPendingFiles(prev => [...prev, { name: fileName, content, type: 'file' }])
     addMessage({
       role: 'assistant',
       content: `📤 **${fileName}** uploaded as attachment`
@@ -642,7 +773,27 @@ export function ChatWindow() {
   const activeModel = filteredModels.find(m => m.id === settings.aiSettings.preferredModelId) || filteredModels[0]
 
   return (
-    <div className="flex flex-col h-screen relative">
+    <div
+      className="flex flex-col h-screen relative"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={async (e) => {
+        e.preventDefault()
+        const files = Array.from(e.dataTransfer.files)
+        if (files.length === 0) return
+
+        for (const file of files) {
+          if (file.type.startsWith('image/')) {
+            if (file.size > 5 * 1024 * 1024) continue
+            const reader = new FileReader()
+            reader.onload = (e) => {
+              const result = e.target?.result as string
+              setPendingFiles(prev => [...prev, { name: file.name, content: result, type: 'image' }])
+            }
+            reader.readAsDataURL(file)
+          }
+        }
+      }}
+    >
       {/* Chat Header */}
       <div className="glass-light border-b border-white/10 px-6 py-4 flex items-center justify-between relative z-[60]">
         <div className="flex items-center gap-4">
@@ -811,37 +962,33 @@ export function ChatWindow() {
       {/* Input Bar */}
       <div className="glass-input border-t border-white/20 px-6 py-4">
         {/* Knowledge Base Indicator */}
-        {knowledgeBase.length > 0 && (
-          <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-            <Database className="h-4 w-4 text-emerald-400" />
-            <span className="text-sm text-emerald-300 flex-1 truncate">
-              {(() => {
-                // Extract unique sources from fileId
-                const sources = [...new Set(knowledgeBase.map(kb => {
-                  const fileId = kb.fileId
-                  if (fileId.startsWith('github-')) {
-                    // Format: github-owner/repo-readme -> owner/repo
-                    const match = fileId.match(/^github-(.+)-readme$/)
-                    return `📦 ${match ? match[1] : fileId.replace('github-', '')}`
-                  }
-                  if (fileId.startsWith('notion-')) {
-                    // Format: notion-PageTitle -> PageTitle
-                    return `📝 ${fileId.replace('notion-', '')}`
-                  }
-                  return fileId
-                }))]
-                return `${sources.length} source${sources.length > 1 ? 's' : ''} indexed: ${sources.slice(0, 3).join(', ')}${sources.length > 3 ? '...' : ''}`
-              })()}
-            </span>
-            <button
-              onClick={clearKnowledgeBase}
-              className="ml-auto p-1 hover:bg-white/10 rounded transition-colors text-emerald-400/70 hover:text-red-400"
-              title="Clear Knowledge Base"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
+        {(() => {
+          // Extract unique valid sources
+          const validSources = [...new Set(knowledgeBase.map(kb => {
+            const fileId = kb.fileId
+            if (fileId.startsWith('github-')) {
+              const match = fileId.match(/^github-(.+)-readme$/)
+              return `📦 ${match ? match[1] : fileId.replace('github-', '')}`
+            }
+            if (fileId.startsWith('notion-')) {
+              return `📝 ${fileId.replace('notion-', '')}`
+            }
+            // Local file lookup - only return name if it exists in store
+            const file = files.find(f => f.id === fileId)
+            return file ? `📄 ${file.filename}` : null
+          }).filter(Boolean))]
+
+          if (validSources.length === 0) return null
+
+          return (
+            <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+              <Database className="h-4 w-4 text-emerald-400" />
+              <span className="text-sm text-emerald-300 flex-1 truncate">
+                {`${validSources.length} source${validSources.length > 1 ? 's' : ''} indexed: ${validSources.slice(0, 3).join(', ')}${validSources.length > 3 ? '...' : ''}`}
+              </span>
+            </div>
+          )
+        })()}
 
         {/* Pending Files Preview */}
         {pendingFiles.length > 0 && (
@@ -909,7 +1056,7 @@ export function ChatWindow() {
               type="file"
               ref={fileInputRef}
               className="hidden"
-              accept=".txt,.md,.pdf,.docx"
+              accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif"
               onChange={handleFileUpload}
             />
 
@@ -1006,6 +1153,7 @@ export function ChatWindow() {
           />
         )
       }
+      {showOnboarding && <OnboardingGuide />}
     </div >
   )
 }

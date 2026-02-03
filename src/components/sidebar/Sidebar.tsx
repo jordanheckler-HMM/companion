@@ -55,7 +55,7 @@ const APP_CONFIG: Record<string, { icon: any, label: string, view: string }> = {
 
 
 export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
   const { settings } = useStore()
 
   const connectedApps = [
@@ -69,7 +69,7 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'h-screen glass-sidebar transition-all duration-300 flex flex-col border-r border-white/10 relative z-[70]',
+        'h-screen glass-sidebar transition-all duration-300 flex flex-col border-r border-white/10 relative z-[70] flex-shrink-0',
         collapsed ? 'w-16' : 'w-64'
       )}
     >

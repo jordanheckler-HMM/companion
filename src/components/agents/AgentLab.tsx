@@ -175,7 +175,7 @@ export function AgentLab() {
                                             </div>
                                             <div>
                                                 <h4 className="font-bold tracking-tight">{agent.name}</h4>
-                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold opacity-60">
+                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold opacity-60 truncate max-w-[120px]" title={agent.preferredModelId || 'Default Engine'}>
                                                     {agent.preferredModelId || 'Default Engine'}
                                                 </p>
                                             </div>

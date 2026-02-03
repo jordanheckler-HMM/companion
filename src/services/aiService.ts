@@ -9,6 +9,7 @@ import { ErrorLogger, ErrorSeverity } from '../utils/errorLogger'
 export interface ChatMessage {
     role: 'user' | 'assistant' | 'system'
     content: string
+    images?: string[]
 }
 
 export interface ChatResponse {
@@ -217,6 +218,24 @@ The editor will open with this content pre-loaded. The user can then edit, save,
     }
 
     /**
+     * Helper to parse base64 image data
+     */
+    private parseImage(dataUrl: string): { mimeType: string; data: string } {
+        if (dataUrl.startsWith('data:')) {
+            const commaIndex = dataUrl.indexOf(',')
+            if (commaIndex !== -1) {
+                const header = dataUrl.substring(0, commaIndex)
+                const data = dataUrl.substring(commaIndex + 1)
+                const mimeMatch = header.match(/^data:(.+);base64$/)
+                const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg'
+                return { mimeType, data }
+            }
+        }
+        // If no header or invalid format, assume it's raw base64 or treat input as is
+        return { mimeType: 'image/jpeg', data: dataUrl }
+    }
+
+    /**
      * Extract tool calls from AI response. 
      * Supports multiple patterns for robustness:
      * 1. Standard: [TOOL:name]{"arg": "val"}[/TOOL]
@@ -377,7 +396,21 @@ The editor will open with this content pre-loaded. The user can then edit, save,
 
         const body: any = {
             model: model.id,
-            messages: messages,
+            messages: messages.map(m => {
+                if (m.images && m.images.length > 0) {
+                    return {
+                        role: m.role,
+                        content: [
+                            { type: 'text', text: m.content },
+                            ...m.images.map(img => ({
+                                type: 'image_url',
+                                image_url: { url: img } // OpenAI expects full data URL
+                            }))
+                        ]
+                    }
+                }
+                return { role: m.role, content: m.content }
+            }),
         }
 
         if (tools.length > 0) {
@@ -439,7 +472,11 @@ The editor will open with this content pre-loaded. The user can then edit, save,
 
         const body: any = {
             model: model.id,
-            messages: messages,
+            messages: messages.map(m => ({
+                role: m.role,
+                content: m.content,
+                images: m.images ? m.images.map(img => this.parseImage(img).data) : undefined
+            })),
             stream: false,
         }
 
@@ -534,7 +571,28 @@ The editor will open with this content pre-loaded. The user can then edit, save,
                 model: model.id,
                 max_tokens: 4096,
                 system: systemMessage?.content,
-                messages: conversationMessages,
+                messages: conversationMessages.map(m => {
+                    if (m.images && m.images.length > 0) {
+                        return {
+                            role: m.role,
+                            content: [
+                                { type: 'text', text: m.content },
+                                ...m.images.map(img => {
+                                    const { mimeType, data } = this.parseImage(img)
+                                    return {
+                                        type: 'image',
+                                        source: {
+                                            type: 'base64',
+                                            media_type: mimeType,
+                                            data: data
+                                        }
+                                    }
+                                })
+                            ]
+                        }
+                    }
+                    return { role: m.role, content: m.content }
+                }),
                 tools: this.getAnthropicTools(),
             }),
         })
@@ -675,7 +733,8 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
     async streamMessage(
         messages: ChatMessage[],
         onChunk: (chunk: string) => void,
-        explicitModelId?: string
+        explicitModelId?: string,
+        signal?: AbortSignal
     ): Promise<void> {
         const registry = ModelRegistry.getInstance()
         const modelId = explicitModelId || this.settings.preferredModelId || 'gpt-3.5-turbo'
@@ -716,7 +775,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                 }
 
                 if (model.provider === 'ollama') {
-                    await this.retryOperation(() => this.streamFromOllama(currentMessages, model, streamChunk), 'StreamOllama')
+                    await this.retryOperation(() => this.streamFromOllama(currentMessages, model, streamChunk, signal), 'StreamOllama')
                 } else if (model.provider === 'openai') {
                     await this.retryOperation(() => this.streamFromOpenAI(currentMessages, model, streamChunk), 'StreamOpenAI')
                 } else if (model.provider === 'google') {
@@ -789,60 +848,169 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         return models.map(m => m.id)
     }
 
+    private async resizeImage(base64Data: string, mimeType: string, signal?: AbortSignal): Promise<string> {
+        return new Promise((resolve) => {
+            if (signal?.aborted) return resolve(base64Data)
+
+            const img = new Image()
+
+            const onAbort = () => {
+                img.src = '' // Cancel load
+                resolve(base64Data)
+            }
+            signal?.addEventListener('abort', onAbort)
+
+            img.onload = () => {
+                signal?.removeEventListener('abort', onAbort)
+                // Aggressively limit size to prevent VRAM OOM on local models
+                const MAX_DIM = 640
+                let width = img.width
+                let height = img.height
+
+                console.log(`[AIService] Resizing image: ${width}x${height} -> max ${MAX_DIM}`)
+
+                if (width > height) {
+                    if (width > MAX_DIM) {
+                        height *= MAX_DIM / width
+                        width = MAX_DIM
+                    }
+                } else {
+                    if (height > MAX_DIM) {
+                        width *= MAX_DIM / height
+                        height = MAX_DIM
+                    }
+                }
+
+                const canvas = document.createElement('canvas')
+                canvas.width = width
+                canvas.height = height
+                const ctx = canvas.getContext('2d')
+                if (!ctx) {
+                    // Fallback to original if canvas fails (though this carries risk of 500 if format is bad)
+                    resolve(base64Data)
+                    return
+                }
+
+                // Fill white background to handle transparency (PNG -> JPEG conversion turns transparent to black otherwise)
+                ctx.fillStyle = '#FFFFFF'
+                ctx.fillRect(0, 0, width, height)
+
+                // Draw image
+                ctx.drawImage(img, 0, 0, width, height)
+
+                // Force JPEG output for compatibility with local vision models (removes Alpha, ensures common format)
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+                const parts = dataUrl.split(',')
+                resolve(parts[1])
+            }
+            img.onerror = () => {
+                console.warn('[AIService] Failed to load image for resizing')
+                // Do NOT send original if it failed to load, it's likely corrupt or unsupported
+                resolve('')
+            }
+            img.src = `data:${mimeType};base64,${base64Data}`
+        })
+    }
+
     /**
      * Stream from Ollama
      */
-    private async streamFromOllama(messages: ChatMessage[], model: ModelDefinition, onChunk: (chunk: string) => void) {
+    private async streamFromOllama(messages: ChatMessage[], model: ModelDefinition, onChunk: (chunk: string) => void, signal?: AbortSignal) {
+        // Pre-process messages to handle resizing and local model constraints
+        // Filter out system messages for vision models FIRST
+        const filteredMessages = messages.filter(m => !(model.capabilities.vision && m.role === 'system'))
+
+        const processedMessages = await Promise.all(filteredMessages.map(async (m, index) => {
+            if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+
+            const isLast = index === filteredMessages.length - 1
+            let images: string[] | undefined
+
+            if (isLast && m.images && m.images.length > 0) {
+                // Most local models only support 1 image, and perform better if resized
+                // Force JPEG for better compression and compatibility
+                const { mimeType, data } = this.parseImage(m.images[0])
+                const resizedData = await this.resizeImage(data, mimeType, signal)
+                images = [resizedData]
+            }
+
+            return {
+                role: m.role,
+                content: m.content,
+                images
+            }
+        }))
+
         // Add a safety timeout for the INITIAL connection
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 30000)
 
-        const response = await fetch(`${this.settings.ollamaUrl}/api/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: model.id,
-                messages,
-                stream: true,
-            }),
-        })
+        // Link external signal to this controller
+        if (signal) {
+            if (signal.aborted) {
+                controller.abort()
+            } else {
+                signal.addEventListener('abort', () => controller.abort())
+            }
+        }
 
-        clearTimeout(timeoutId)
+        // Increase timeout to 180s (3 mins) for slow local vision processing
+        const timeoutId = setTimeout(() => controller.abort(), 180000)
 
-        if (!response.ok) throw new Error(`Ollama stream error: ${response.status} ${response.statusText}`)
-        if (!response.body) throw new Error('No response body')
+        try {
+            const response = await fetch(`${this.settings.ollamaUrl}/api/chat`, {
+                method: 'POST',
+                signal: controller.signal,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model.id,
+                    messages: processedMessages,
+                    stream: true,
+                }),
+            })
 
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
+            clearTimeout(timeoutId)
 
-        while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
+            if (!response.ok) throw new Error(`Ollama stream error: ${response.status} ${response.statusText}`)
+            if (!response.body) throw new Error('No response body')
 
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ''
 
-            // Keep the last partial line in the buffer
-            buffer = lines.pop() || ''
+            while (true) {
+                if (signal?.aborted) {
+                    await reader.cancel()
+                    break
+                }
+                const { done, value } = await reader.read()
+                if (done) break
 
-            for (const line of lines) {
-                const trimmed = line.trim()
-                if (!trimmed) continue
-                try {
-                    const data = JSON.parse(line)
-                    // Regular content
-                    if (data.message?.content) {
-                        onChunk(data.message.content)
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split('\n')
+
+                // Keep the last partial line in the buffer
+                buffer = lines.pop() || ''
+
+                for (const line of lines) {
+                    const trimmed = line.trim()
+                    if (!trimmed) continue
+                    try {
+                        const data = JSON.parse(line)
+                        // Regular content
+                        if (data.message?.content) {
+                            onChunk(data.message.content)
+                        }
+                        // Some versions of Ollama or specific models might use reasoning_content
+                        if (data.message?.reasoning_content) {
+                            onChunk(`<think>${data.message.reasoning_content}</think>`)
+                        }
+                    } catch (e) {
+                        console.error('Error parsing Ollama stream chunk:', e)
                     }
-                    // Some versions of Ollama or specific models might use reasoning_content
-                    if (data.message?.reasoning_content) {
-                        onChunk(`<think>${data.message.reasoning_content}</think>`)
-                    }
-                } catch (e) {
-                    console.error('Error parsing Ollama stream chunk:', e)
                 }
             }
+        } finally {
+            clearTimeout(timeoutId)
         }
     }
 
@@ -850,20 +1018,50 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
      * Stream from OpenAI
      */
     private async streamFromOpenAI(messages: ChatMessage[], model: ModelDefinition, onChunk: (chunk: string) => void) {
+        const apiKey = this.getApiKey('openai')
+        if (!apiKey) throw new Error('Missing OpenAI API Key. Please add it in Settings.')
+
+        // Transform messages for OpenAI Vision
+        const formattedMessages = messages.map(m => {
+            if (m.images && m.images.length > 0) {
+                return {
+                    role: m.role,
+                    content: [
+                        { type: 'text', text: m.content },
+                        ...m.images.map(img => {
+                            // Ensure data URL format for OpenAI
+                            const { mimeType, data } = this.parseImage(img)
+                            return {
+                                type: 'image_url',
+                                image_url: {
+                                    url: `data:${mimeType};base64,${data}`
+                                }
+                            }
+                        })
+                    ]
+                }
+            }
+            return { role: m.role, content: m.content }
+        })
+
         const response = await tauriFetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.settings.apiKey}`,
+                'Authorization': `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
                 model: model.id,
-                messages,
+                messages: formattedMessages,
                 stream: true,
             }),
         })
 
-        if (!response.ok) throw new Error(`OpenAI error: ${response.statusText}`)
+        if (!response.ok) {
+            if (response.status === 401) throw new Error('OpenAI Authorization Failed. Please check your API Key in Settings.')
+            if (response.status === 429) throw new Error('OpenAI Rate Limit Exceeded. Check your usage limits.')
+            throw new Error(`OpenAI error: ${response.status} ${response.statusText}`)
+        }
         if (!response.body) throw new Error('No response body')
 
         const reader = response.body.getReader()
@@ -1106,7 +1304,18 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         const apiKey = this.getApiKey('google')
         const contents = messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }]
+            parts: [
+                { text: m.content },
+                ...(m.images || []).map(img => {
+                    const { mimeType, data } = this.parseImage(img)
+                    return {
+                        inline_data: {
+                            mime_type: mimeType,
+                            data: data
+                        }
+                    }
+                })
+            ]
         }))
 
         // Handle system instruction if present
@@ -1140,7 +1349,18 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         const apiKey = this.getApiKey('google')
         const contents = messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }]
+            parts: [
+                { text: m.content },
+                ...(m.images || []).map(img => {
+                    const { mimeType, data } = this.parseImage(img)
+                    return {
+                        inline_data: {
+                            mime_type: mimeType,
+                            data: data
+                        }
+                    }
+                })
+            ]
         }))
 
         const body: any = { contents }

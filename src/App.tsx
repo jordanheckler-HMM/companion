@@ -32,7 +32,7 @@ import { ExecutionStatus } from '@/components/agents/ExecutionStatus'
 function App() {
   const {
     currentView, setCurrentView, files, addFile, removeFile, addKnowledgeChunks,
-    settings, updateSettings, addMessage, updateMessage,
+    settings, updateSettings,
     addConnectedApp, removeConnectedApp,
     setAvailableModels, setOllamaInstallStatus, hasHydrated
   } = useStore()
@@ -100,6 +100,30 @@ function App() {
   useEffect(() => {
     if (hasHydrated) {
       automationService.restoreScheduledAutomations()
+
+      // Knowledge Base Sync: Cleanup orphaned chunks on startup
+      const syncKnowledgeBase = async () => {
+        const { knowledgeBase, files, removeKnowledgeChunksByFileId } = useStore.getState()
+
+        // Find chunks for local files that no longer exist
+        const orphanedFileIds = [...new Set(knowledgeBase
+          .map(kb => kb.fileId)
+          .filter(fileId =>
+            !fileId.startsWith('github-') &&
+            !fileId.startsWith('notion-') &&
+            !files.some(f => f.id === fileId)
+          )
+        )]
+
+        if (orphanedFileIds.length > 0) {
+          console.log(`[App] Cleaning up ${orphanedFileIds.length} orphaned knowledge sources...`)
+          for (const fileId of orphanedFileIds) {
+            await removeKnowledgeChunksByFileId(fileId)
+          }
+        }
+      }
+
+      syncKnowledgeBase()
     }
   }, [hasHydrated])
 
@@ -178,7 +202,7 @@ function App() {
 
       <Sidebar currentView={currentView} onViewChange={setCurrentView} />
 
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-hidden min-w-0">
         <ErrorBoundary>
           {currentView === 'home' && <ChatWindow />}
           {currentView === 'agents' && <AgentLab />}
@@ -246,15 +270,8 @@ function App() {
                     const ragService = new RAGService(settings.aiSettings)
                     const chunks = ragService.chunkText(content, fileId)
 
-                    const statusId = addMessage({
-                      role: 'assistant',
-                      content: `Indexing **${file.name}** into knowledge base...`
-                    })
-
                     const enrichedChunks = await ragService.generateEmbeddings(chunks)
                     addKnowledgeChunks(enrichedChunks)
-
-                    updateMessage(statusId, `Completed indexing **${file.name}**. It is now part of my permanent knowledge.`)
                   } catch (error) {
                     console.error('File knowledge upload error:', error)
                   }
@@ -268,7 +285,7 @@ function App() {
           {currentView === 'notion' && <NotionDashboard />}
 
           {currentView === 'integrations' && (
-            <div className="h-full overflow-y-auto relative">
+            <div className="h-full overflow-y-auto">
               <div className="glass-light border-b border-white/10 px-6 py-4">
                 <h2 className="text-lg font-semibold">Integrations</h2>
                 <p className="text-sm text-muted-foreground">Connect your apps</p>
