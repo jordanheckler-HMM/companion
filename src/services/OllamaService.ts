@@ -11,9 +11,10 @@ export class OllamaService {
     /**
      * Check if Ollama is installed by trying to run 'ollama --version'
      */
+
     public static async isInstalled(): Promise<boolean> {
         try {
-            const command = Command.create('ollama', ['--version'])
+            const command = Command.create('ollama-version')
             const output = await command.execute()
             return output.code === 0
         } catch (e) {
@@ -25,59 +26,22 @@ export class OllamaService {
      * Get platform-specific installation command/url
      */
     public static getInstallationInfo(): { type: 'script' | 'download', value: string } {
-        const platform = window.navigator.platform.toLowerCase()
-
-        if (platform.includes('mac')) {
-            return {
-                type: 'script',
-                value: 'curl -fsSL https://ollama.com/install.sh | sh'
-            }
-        } else if (platform.includes('win')) {
-            return {
-                type: 'download',
-                value: 'https://ollama.com/download/OllamaSetup.exe'
-            }
-        } else {
-            // Linux
-            return {
-                type: 'script',
-                value: 'curl -fsSL https://ollama.com/install.sh | sh'
-            }
+        // ... (Keep existing platform logic if needed for UI info, but we won't execute it)
+        return {
+            type: 'download',
+            value: 'https://ollama.com/download'
         }
     }
 
     /**
-     * Run installation script (macOS/Linux only for scripts)
+     * Run installation script (DISABLED for security)
      */
     public static async install(onStatus: (status: string) => void): Promise<boolean> {
-        const info = this.getInstallationInfo()
+        onStatus('Automatic installation has been disabled for security.')
+        onStatus('Please download Ollama manually from ollama.com')
 
-        if (info.type === 'download') {
-            onStatus('Opening download page...')
-            // const { open } = await import('@tauri-apps/plugin-shell')
-            // Special case for windows - open browser
-            // In a real production app we might download it, but for simplicity:
-            // await open(info.value)
-            return false // Let UI handle manual download
-        }
-
-        try {
-            onStatus('Beginning installation...')
-            const command = Command.create('sh', ['-c', info.value])
-
-            command.stdout.on('data', (line) => {
-                if (line.includes('Installing')) onStatus('Installing Ollama...')
-                if (line.includes('Downloading')) onStatus('Downloading components...')
-            })
-
-            const output = await command.execute()
-            onStatus(output.code === 0 ? 'Installation complete!' : 'Installation failed.')
-            return output.code === 0
-        } catch (e) {
-            console.error('Installation failed:', e)
-            onStatus('Installation failed: ' + (e as Error).message)
-            return false
-        }
+        // Open browser (if we had the open tool imported, but letting UI handle it is safer)
+        return false
     }
 
     /**
@@ -88,7 +52,7 @@ export class OllamaService {
         onProgress?: (progress: number) => void
     ): Promise<boolean> {
         try {
-            const command = Command.create('ollama', ['pull', name])
+            const command = Command.create('ollama-pull', [name])
 
             command.stdout.on('data', (line) => {
                 // Simple progress parsing if Ollama outputs it in a predictable way
@@ -111,7 +75,7 @@ export class OllamaService {
      */
     public static async deleteModel(name: string): Promise<boolean> {
         try {
-            const command = Command.create('ollama', ['rm', name])
+            const command = Command.create('ollama-rm', [name])
             const output = await command.execute()
             return output.code === 0
         } catch (e) {

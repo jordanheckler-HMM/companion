@@ -20,9 +20,9 @@ export class CodeExecutionTool {
 
             let command: Command<string>
             if (language === 'python') {
-                command = Command.create('python3', [filePath])
+                command = Command.create('python-run', [filePath])
             } else {
-                command = Command.create('node', [filePath])
+                command = Command.create('node-run', [filePath])
             }
 
             const output = await command.execute()

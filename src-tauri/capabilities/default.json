@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
+  "description": "Secure capability for Companion main window",
   "windows": [
     "main",
     "panel"
@@ -9,59 +9,205 @@
   "permissions": [
     "core:default",
     "core:window:allow-hide",
-    "store:default",
-    "dialog:default",
-    "fs:default",
-    "http:default",
-    "shell:default",
-    "notification:default",
-    "fs:read-all",
-    "fs:write-all",
-    {
-      "identifier": "fs:scope",
-      "allow": [
-        {
-          "path": "$HOME/**"
-        }
-      ]
-    },
-    {
-      "identifier": "http:allow-fetch",
-      "allow": [
-        {
-          "url": "*://*"
-        }
-      ]
-    },
     {
       "identifier": "shell:allow-execute",
       "allow": [
         {
-          "name": "python3",
-          "cmd": "python3",
-          "args": true
-        },
-        {
-          "name": "python",
-          "cmd": "python",
-          "args": true
-        },
-        {
-          "name": "node",
-          "cmd": "node",
-          "args": true
-        },
-        {
-          "name": "ollama",
+          "name": "ollama-version",
           "cmd": "ollama",
-          "args": true
+          "args": [
+            "--version"
+          ]
         },
         {
-          "name": "sh",
-          "cmd": "sh",
-          "args": true
+          "name": "ollama-run",
+          "cmd": "ollama",
+          "args": [
+            "run",
+            {
+              "validator": "^[a-zA-Z0-9_\\-:]+$"
+            }
+          ]
+        },
+        {
+          "name": "ollama-serve",
+          "cmd": "ollama",
+          "args": [
+            "serve"
+          ]
+        },
+        {
+          "name": "ollama-list",
+          "cmd": "ollama",
+          "args": [
+            "list"
+          ]
+        },
+        {
+          "name": "ollama-pull",
+          "cmd": "ollama",
+          "args": [
+            "pull",
+            {
+              "validator": "^[a-zA-Z0-9_\\-:/\\.]+$"
+            }
+          ]
+        },
+        {
+          "name": "ollama-rm",
+          "cmd": "ollama",
+          "args": [
+            "rm",
+            {
+              "validator": "^[a-zA-Z0-9_\\-:]+$"
+            }
+          ]
+        },
+        {
+          "name": "python-run",
+          "cmd": "python3",
+          "args": [
+            {
+              "validator": "^.*$"
+            }
+          ]
+        },
+        {
+          "name": "node-run",
+          "cmd": "node",
+          "args": [
+            {
+              "validator": "^.*$"
+            }
+          ]
         }
       ]
-    }
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-create",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$HOME/companion-workspace/**"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    "http:default",
+    "store:default",
+    "dialog:default",
+    "notification:default"
   ]
 }
