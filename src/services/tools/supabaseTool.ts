@@ -25,7 +25,7 @@ export class SupabaseTool {
                 case 'count_rows':
                     return await this.countRows(client, args.table)
                 case 'query':
-                    return await this.runQuery(client, args.table, args.query)
+                    return await this.runQuery(client, args.table, args)
                 case 'insert':
                     return await this.insertRow(client, args.table, args.data)
                 case 'update':
@@ -132,24 +132,41 @@ export class SupabaseTool {
         return count?.toString() || '0'
     }
 
-    private async runQuery(client: any, table: string, query: any) {
-        // query here implies a JSON-like object describing the select/filter
-        // e.g. { select: '*', eq: { status: 'active' }, limit: 10 }
+    private async runQuery(client: any, table: string, args: any) {
+        // Handle both older 'query' object and flatter UI args
+        const select = args.query?.select || args.select || '*'
+        let builder = client.from(table).select(select)
 
-        let builder = client.from(table).select(query.select || '*')
+        // Handle flatter filter string (e.g. "status=new")
+        const filter = args.query?.filter || args.filter
+        if (filter && typeof filter === 'string' && filter.includes('=')) {
+            const [col, val] = filter.split('=')
+            builder = builder.eq(col.trim(), val.trim())
+        }
 
-        if (query.eq) {
-            Object.entries(query.eq).forEach(([col, val]) => {
+        // Handle flatter limit
+        const limit = args.query?.limit || args.limit
+        if (limit) {
+            const limitVal = parseInt(limit as string)
+            if (!isNaN(limitVal)) builder = builder.limit(limitVal)
+        }
+
+        // Handle flatter order (e.g. "created_at:desc")
+        const order = args.query?.order || args.order
+        if (order && typeof order === 'string') {
+            if (order.includes(':')) {
+                const [col, dir] = order.split(':')
+                builder = builder.order(col.trim(), { ascending: dir.trim().toLowerCase() === 'asc' })
+            } else {
+                builder = builder.order(order)
+            }
+        }
+
+        // Backward compatibility for eq object
+        if (args.query?.eq) {
+            Object.entries(args.query.eq).forEach(([col, val]) => {
                 builder = builder.eq(col as string, val)
             })
-        }
-
-        if (query.limit) {
-            builder = builder.limit(query.limit)
-        }
-
-        if (query.order) {
-            builder = builder.order(query.order.column, { ascending: query.order.ascending })
         }
 
         const { data, error } = await builder

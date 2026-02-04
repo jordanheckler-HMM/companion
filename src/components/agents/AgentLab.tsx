@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useStore } from '@/store'
-import { Plus, Bot, Settings2, Edit, Trash2, Share, Upload } from 'lucide-react'
+import { Plus, Bot, Settings2, Edit, Trash2, Share, Upload, LayoutGrid, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AgentEditor, ICON_OPTIONS } from './AgentEditor'
 import { AutomationEditor } from './AutomationEditor'
 import { WorkflowList } from './WorkflowList'
 import { ask, message } from '@tauri-apps/plugin-dialog'
 import { SharingService } from '@/services/SharingService'
+import { cn } from '@/lib/utils'
 
 export function AgentLab() {
     const { agents, automations, vaultPath, removeAgent } = useStore()
@@ -15,6 +16,7 @@ export function AgentLab() {
     const [isAutomationEditorOpen, setIsAutomationEditorOpen] = useState(false)
     const [workflowAgentId, setWorkflowAgentId] = useState<string | undefined>(undefined)
     const [editingAutomationId, setEditingAutomationId] = useState<string | undefined>(undefined)
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
     const handleCreateAgent = () => {
         setEditingAgentId(undefined)
@@ -124,6 +126,35 @@ export function AgentLab() {
                 </div>
             </div>
 
+            {/* View Toggle Bar */}
+            <div className="px-6 py-2 flex items-center justify-between bg-white/5 border-b border-white/5">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    {agents.length} Agent{agents.length !== 1 ? 's' : ''} Configured
+                </div>
+                <div className="flex bg-black/40 border border-white/10 rounded-lg p-0.5">
+                    <button
+                        onClick={() => setViewMode('grid')}
+                        className={cn(
+                            "p-1.5 rounded-md transition-all",
+                            viewMode === 'grid' ? "bg-white/10 text-primary-accent" : "text-muted-foreground hover:text-white"
+                        )}
+                        title="Grid View"
+                    >
+                        <LayoutGrid className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setViewMode('list')}
+                        className={cn(
+                            "p-1.5 rounded-md transition-all",
+                            viewMode === 'list' ? "bg-white/10 text-primary-accent" : "text-muted-foreground hover:text-white"
+                        )}
+                        title="List View"
+                    >
+                        <List className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+
             {/* Main Content */}
             <div className="flex-1 p-6 overflow-y-auto">
                 {agents.length === 0 ? (
@@ -152,10 +183,74 @@ export function AgentLab() {
                         </Button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className={cn(
+                        viewMode === 'grid'
+                            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                            : "space-y-3"
+                    )}>
                         {agents.map(agent => {
                             const IconComponent = ICON_OPTIONS.find(i => i.id === agent.icon)?.icon || Bot
                             const color = agent.color || '#3b82f6'
+
+                            if (viewMode === 'list') {
+                                return (
+                                    <div key={agent.id} className="glass-card p-3 rounded-xl hover:bg-white/5 transition-all group flex items-center gap-4 relative overflow-hidden border border-white/5">
+                                        <div
+                                            className="absolute left-0 top-0 bottom-0 w-1 opacity-40"
+                                            style={{ backgroundColor: color }}
+                                        />
+                                        <div
+                                            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shadow-inner shrink-0"
+                                            style={{ backgroundColor: `${color}15`, color: color }}
+                                        >
+                                            <IconComponent className="w-5 h-5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="font-bold text-sm truncate">{agent.name}</h4>
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground uppercase font-bold tracking-tighter">
+                                                    {agent.preferredModelId || 'Default'}
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground truncate opacity-70">
+                                                {agent.description || 'No description provided.'}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-4 shrink-0">
+                                            <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider hidden sm:block">
+                                                {automations.filter(a => a.pipeline.some(step => step.agentId === agent.id)).length} Workflows
+                                            </div>
+                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 text-[11px] hover:bg-white/10 rounded-lg px-2"
+                                                    onClick={() => handleOpenWorkflow(agent.id)}
+                                                >
+                                                    <Settings2 className="w-3.5 h-3.5 mr-1" />
+                                                    Workflow
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleEditAgent(agent.id)}
+                                                    className="h-8 w-8 text-muted-foreground hover:text-white"
+                                                >
+                                                    <Edit className="w-3.5 h-3.5" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => removeAgent(agent.id)}
+                                                    className="h-8 w-8 text-red-400/60 hover:text-red-400"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            }
 
                             return (
                                 <div key={agent.id} className="glass-card p-5 rounded-2xl hover:bg-white/5 transition-all group relative overflow-hidden">

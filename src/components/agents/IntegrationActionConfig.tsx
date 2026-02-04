@@ -48,12 +48,82 @@ const INTEGRATIONS = [
         name: 'Supabase',
         icon: Database,
         actions: [
-            { id: 'query', name: 'Query Table', args: ['table', 'select', 'filter'] },
+            { id: 'query', name: 'Query Table', args: ['table', 'select', 'filter', 'limit', 'order'] },
             { id: 'insert', name: 'Insert Row', args: ['table', 'data'] },
             { id: 'rpc', name: 'Call Function (RPC)', args: ['functionName', 'args'] }
         ]
     }
 ]
+
+const PRESETS: Record<string, Array<{
+    name: string
+    description: string
+    actionId: string
+    args: Record<string, string>
+}>> = {
+    supabase: [
+        {
+            name: "Pull New Leads",
+            description: "Get the 10 most recent new leads",
+            actionId: "query",
+            args: { table: "leads", select: "*", filter: "status=new", limit: "10", order: "created_at:desc" }
+        },
+        {
+            name: "Daily Health Check",
+            description: "Get recent error logs",
+            actionId: "query",
+            args: { table: "logs", select: "*", filter: "level=error", limit: "50", order: "created_at:desc" }
+        },
+        {
+            name: "Top Users",
+            description: "Get top 5 users by revenue",
+            actionId: "query",
+            args: { table: "users", select: "*", limit: "5", order: "revenue:desc" }
+        }
+    ],
+    notion: [
+        {
+            name: "Daily Journal",
+            description: "Create a new daily entry",
+            actionId: "create_page",
+            args: { title: "{{date}} Journal", parentId: "YOUR_DATABASE_ID", content: "## Daily Goals\n- [ ] " }
+        },
+        {
+            name: "Search Pages",
+            description: "Find pages mentioning a topic",
+            actionId: "search",
+            args: { query: "{{topic}}" }
+        }
+    ],
+    github: [
+        {
+            name: "List Bugs",
+            description: "Get open bug issues",
+            actionId: "list_issues",
+            args: { repo: "owner/repo", state: "open", labels: "bug" }
+        },
+        {
+            name: "Morning Review",
+            description: "Get recent pull requests",
+            actionId: "list_issues",
+            args: { repo: "owner/repo", state: "open" }
+        }
+    ],
+    google_calendar: [
+        {
+            name: "Today's Schedule",
+            description: "Get events for the next 12 hours",
+            actionId: "list_events",
+            args: { count: "10" }
+        },
+        {
+            name: "Block Focus Time",
+            description: "Create a 1-hour focus block",
+            actionId: "create_event",
+            args: { title: "Focus Time", duration: "60", description: "Deep work session" }
+        }
+    ]
+}
 
 export function IntegrationActionConfig({ integrationId, integrationAction, integrationArgs, onChange }: IntegrationActionConfigProps) {
     const { settings } = useStore()
@@ -85,6 +155,12 @@ export function IntegrationActionConfig({ integrationId, integrationAction, inte
         const newArgs = { ...args, [key]: value }
         setArgs(newArgs)
         onChange({ integrationId: selectedIntegration, integrationAction: selectedAction, integrationArgs: newArgs })
+    }
+
+    const handlePresetSelect = (preset: typeof PRESETS['supabase'][0]) => {
+        setSelectedAction(preset.actionId)
+        setArgs(preset.args)
+        onChange({ integrationId: selectedIntegration, integrationAction: preset.actionId, integrationArgs: preset.args })
     }
 
     const currentIntegration = INTEGRATIONS.find(i => i.id === selectedIntegration)
@@ -144,39 +220,65 @@ export function IntegrationActionConfig({ integrationId, integrationAction, inte
                 </div>
             )}
 
+
             {/* Action Selector */}
             {selectedIntegration && currentIntegration && (
-                <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Action</label>
-                    <select
-                        value={selectedAction || ''}
-                        onChange={(e) => handleActionChange(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-cyan-500/50"
-                    >
-                        <option value="" disabled>Select an action...</option>
-                        {currentIntegration.actions.map(action => (
-                            <option key={action.id} value={action.id}>{action.name}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
-
-            {/* Argument Inputs */}
-            {currentAction && (
-                <div className="space-y-3 pt-2 border-t border-white/5">
-                    {currentAction.args.map(argKey => (
-                        <div key={argKey} className="space-y-1">
-                            <label className="text-xs text-muted-foreground capitalize">{argKey.replace(/([A-Z])/g, ' $1').trim()}</label>
-                            <input
-                                type="text"
-                                value={args[argKey] || ''}
-                                onChange={(e) => handleArgChange(argKey, e.target.value)}
-                                placeholder={`Enter ${argKey}...`}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-cyan-500/50"
-                            />
-                            <p className="text-[10px] text-white/30">Use <span className="text-cyan-400 font-mono">{'{{variable}}'}</span> to insert values from previous steps.</p>
+                <div className="space-y-4">
+                    {PRESETS[selectedIntegration] && (
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Smart Presets</label>
+                            <div className="grid grid-cols-1 gap-2">
+                                {PRESETS[selectedIntegration].map((preset, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => handlePresetSelect(preset)}
+                                        className="flex items-center justify-between p-3 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 transition-colors text-left group"
+                                    >
+                                        <div>
+                                            <div className="text-sm font-medium text-cyan-400 group-hover:text-cyan-300">{preset.name}</div>
+                                            <div className="text-xs text-muted-foreground">{preset.description}</div>
+                                        </div>
+                                        <div className="text-[10px] px-2 py-1 rounded bg-black/40 text-muted-foreground">
+                                            Auto-fill
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    ))}
+                    )}
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Manual Action</label>
+                        <select
+                            value={selectedAction || ''}
+                            onChange={(e) => handleActionChange(e.target.value)}
+                            className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-cyan-500/50"
+                        >
+                            <option value="" disabled>Select an action...</option>
+                            {currentIntegration.actions.map(action => (
+                                <option key={action.id} value={action.id}>{action.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Argument Inputs */}
+                    {currentAction && (
+                        <div className="space-y-3 pt-2 border-t border-white/5">
+                            {currentAction.args.map(argKey => (
+                                <div key={argKey} className="space-y-1">
+                                    <label className="text-xs text-muted-foreground capitalize">{argKey.replace(/([A-Z])/g, ' $1').trim()}</label>
+                                    <input
+                                        type="text"
+                                        value={args[argKey] || ''}
+                                        onChange={(e) => handleArgChange(argKey, e.target.value)}
+                                        placeholder={`Enter ${argKey}...`}
+                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-cyan-500/50"
+                                    />
+                                    <p className="text-[10px] text-white/30">Use <span className="text-cyan-400 font-mono">{'{{variable}}'}</span> to insert values from previous steps.</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>

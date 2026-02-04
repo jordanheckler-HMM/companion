@@ -3,7 +3,7 @@ import { useStore, AgentBlueprint } from '@/store'
 import {
     X, Save, Bot, Sparkles, Wrench, Cpu, Brain, Zap, Search,
     FileText, Terminal, Layout, MessageSquare, Shield, Globe,
-    LineChart, Code, Check
+    LineChart, Code, Check, Cloud, Monitor
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AIService } from '@/services/aiService'
@@ -44,7 +44,7 @@ export const COLOR_OPTIONS = [
 ]
 
 export function AgentEditor({ agentId, onClose }: AgentEditorProps) {
-    const { agents, addAgent, updateAgent, settings } = useStore()
+    const { agents, addAgent, updateAgent, settings, updateSettings } = useStore()
     const [availableModels, setAvailableModels] = useState<string[]>([])
 
     // Form state
@@ -104,8 +104,18 @@ export function AgentEditor({ agentId, onClose }: AgentEditorProps) {
         onClose()
     }
 
+    const setIntelligenceMode = (mode: 'local' | 'cloud') => {
+        updateSettings({
+            aiSettings: {
+                ...settings.aiSettings,
+                intelligenceMode: mode
+            }
+        })
+    }
+
     const SelectedIcon = ICON_OPTIONS.find(i => i.id === icon)?.icon || Bot
-    const currentDefaultModel = settings.aiSettings.intelligenceMode === 'local'
+    const intelligenceMode = settings.aiSettings.intelligenceMode || 'local'
+    const currentDefaultModel = intelligenceMode === 'local'
         ? settings.aiSettings.ollamaModel
         : settings.aiSettings.cloudModel
 
@@ -206,11 +216,40 @@ export function AgentEditor({ agentId, onClose }: AgentEditorProps) {
                     </div>
 
                     {/* Model Selection */}
-                    <div>
-                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40 mb-2 block flex items-center gap-2">
-                            <Sparkles className="w-3 h-3 text-primary-accent" />
-                            Model Engine
-                        </label>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/40 block flex items-center gap-2">
+                                <Sparkles className="w-3 h-3 text-primary-accent" />
+                                Model Engine
+                            </label>
+
+                            <div className="flex bg-black/40 border border-white/10 rounded-xl p-1 p-0.5">
+                                <button
+                                    onClick={() => setIntelligenceMode('local')}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
+                                        intelligenceMode === 'local'
+                                            ? "bg-primary-accent text-white shadow-lg"
+                                            : "text-muted-foreground hover:bg-white/5"
+                                    )}
+                                >
+                                    <Monitor className="w-3 h-3" />
+                                    Local
+                                </button>
+                                <button
+                                    onClick={() => setIntelligenceMode('cloud')}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
+                                        intelligenceMode === 'cloud'
+                                            ? "bg-primary-accent text-white shadow-lg"
+                                            : "text-muted-foreground hover:bg-white/5"
+                                    )}
+                                >
+                                    <Cloud className="w-3 h-3" />
+                                    Cloud
+                                </button>
+                            </div>
+                        </div>
                         <select
                             className="glass-strong w-full px-5 py-4 rounded-2xl text-sm appearance-none outline-none focus:ring-2 focus:ring-white/20 cursor-pointer border border-white/5"
                             value={preferredModelId}
