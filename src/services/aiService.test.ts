@@ -7,7 +7,8 @@ import * as httpPlugin from '@tauri-apps/plugin-http'
 vi.mock('./toolService', () => ({
     ToolService: {
         executeTool: vi.fn(),
-        getToolDefinitions: vi.fn().mockReturnValue([])
+        getToolDefinitions: vi.fn().mockReturnValue([]),
+        getToolStatusSnapshot: vi.fn().mockReturnValue([])
     }
 }))
 

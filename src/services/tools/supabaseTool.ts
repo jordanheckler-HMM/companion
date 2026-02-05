@@ -1,7 +1,20 @@
 import { createClient } from '@supabase/supabase-js'
+import { confirm } from '@tauri-apps/plugin-dialog'
 import { useStore } from '../../store'
 
+interface PendingSupabaseAction {
+    operation: 'insert' | 'update'
+    table: string
+    data: any
+    id?: string
+    privacyBoundary: 'personal' | 'team'
+    expiresAt: number
+}
+
 export class SupabaseTool {
+    private static readonly CONFIRM_TTL_MS = 10 * 60 * 1000
+    private static pendingActions = new Map<string, PendingSupabaseAction>()
+
     /**
      * Execute a Supabase operation on the user's BYOK project
      */
@@ -13,6 +26,7 @@ export class SupabaseTool {
             throw new Error('Supabase tools are enabled but credentials (URL & Key) are missing in settings.')
         }
 
+        SupabaseTool.pruneExpiredActions()
         const client = createClient(supabaseUrl, supabaseKey)
 
         try {
@@ -27,9 +41,9 @@ export class SupabaseTool {
                 case 'query':
                     return await this.runQuery(client, args.table, args)
                 case 'insert':
-                    return await this.insertRow(client, args.table, args.data)
+                    return await this.insertRow(client, args)
                 case 'update':
-                    return await this.updateRow(client, args.table, args.id, args.data)
+                    return await this.updateRow(client, args)
                 default:
                     return `Unknown operation: ${operation}`
             }
@@ -174,15 +188,198 @@ export class SupabaseTool {
         return JSON.stringify(data, null, 2)
     }
 
-    private async insertRow(client: any, table: string, data: any) {
-        const { data: result, error } = await client.from(table).insert(data).select()
+    private async insertRow(client: any, args: any) {
+        const table = args.table
+        const data = args.data
+        const privacyBoundary = args.privacyBoundary
+        const sync = args.sync === true
+
+        if (!table) {
+            return this.blocked('Supabase write requires a target table.', { required: ['table'] })
+        }
+
+        if (!privacyBoundary || !['personal', 'team'].includes(privacyBoundary)) {
+            return this.blocked('Supabase write requires a privacy boundary (personal or team).', { required: ['privacyBoundary'] })
+        }
+
+        if (!sync) {
+            return this.blocked('Supabase writes must explicitly declare a sync from local state.', { required: ['sync=true'] })
+        }
+
+        if (!data || (Array.isArray(data) && data.length === 0)) {
+            return this.blocked('Supabase insert requires data to write.', { required: ['data'] })
+        }
+
+        const phase = args.phase || 'prepare'
+        if (phase !== 'execute') {
+            const confirmationId = SupabaseTool.createConfirmationId('insert', table, data, undefined, privacyBoundary)
+            return JSON.stringify({
+                phase: 'prepare',
+                tool: 'supabase',
+                operation: 'insert',
+                preview: {
+                    table,
+                    data,
+                    privacyBoundary,
+                    sync: true
+                },
+                confirmationId,
+                nextStep: 'Call insert with phase="execute", confirmationId, and confirm=true to perform the write.'
+            }, null, 2)
+        }
+
+        const confirmationId = args.confirmationId
+        if (!confirmationId || !SupabaseTool.isConfirmationValid(confirmationId, 'insert')) {
+            return this.blocked('Confirmation required before executing write operation.', {
+                required: ['confirmationId'],
+                nextStep: 'Call insert with phase="prepare" to generate a confirmationId.'
+            })
+        }
+
+        if (args.confirm !== true) {
+            return this.blocked('Explicit confirmation is required to execute this write operation.', {
+                required: ['confirm=true']
+            })
+        }
+
+        const pending = SupabaseTool.pendingActions.get(confirmationId)
+        if (!pending) {
+            return this.blocked('Confirmation has expired or is invalid.', { required: ['confirmationId'] })
+        }
+
+        const approved = await confirm(
+            `Insert into ${pending.table}?\n\nPrivacy: ${pending.privacyBoundary}`,
+            { title: 'Confirm Supabase Write', kind: 'warning' }
+        )
+        if (!approved) {
+            return 'User denied Supabase insert.'
+        }
+
+        const { data: result, error } = await client.from(pending.table).insert(pending.data).select()
         if (error) throw error
+        SupabaseTool.pendingActions.delete(confirmationId)
         return JSON.stringify(result, null, 2)
     }
 
-    private async updateRow(client: any, table: string, id: string, data: any) {
-        const { data: result, error } = await client.from(table).update(data).eq('id', id).select()
+    private async updateRow(client: any, args: any) {
+        const table = args.table
+        const id = args.id
+        const data = args.data
+        const privacyBoundary = args.privacyBoundary
+        const sync = args.sync === true
+
+        if (!table) {
+            return this.blocked('Supabase write requires a target table.', { required: ['table'] })
+        }
+
+        if (!id) {
+            return this.blocked('Supabase update requires a target id.', { required: ['id'] })
+        }
+
+        if (!privacyBoundary || !['personal', 'team'].includes(privacyBoundary)) {
+            return this.blocked('Supabase write requires a privacy boundary (personal or team).', { required: ['privacyBoundary'] })
+        }
+
+        if (!sync) {
+            return this.blocked('Supabase writes must explicitly declare a sync from local state.', { required: ['sync=true'] })
+        }
+
+        if (!data || (Array.isArray(data) && data.length === 0)) {
+            return this.blocked('Supabase update requires data to write.', { required: ['data'] })
+        }
+
+        const phase = args.phase || 'prepare'
+        if (phase !== 'execute') {
+            const confirmationId = SupabaseTool.createConfirmationId('update', table, data, id, privacyBoundary)
+            return JSON.stringify({
+                phase: 'prepare',
+                tool: 'supabase',
+                operation: 'update',
+                preview: {
+                    table,
+                    id,
+                    data,
+                    privacyBoundary,
+                    sync: true
+                },
+                confirmationId,
+                nextStep: 'Call update with phase="execute", confirmationId, and confirm=true to perform the write.'
+            }, null, 2)
+        }
+
+        const confirmationId = args.confirmationId
+        if (!confirmationId || !SupabaseTool.isConfirmationValid(confirmationId, 'update')) {
+            return this.blocked('Confirmation required before executing write operation.', {
+                required: ['confirmationId'],
+                nextStep: 'Call update with phase="prepare" to generate a confirmationId.'
+            })
+        }
+
+        if (args.confirm !== true) {
+            return this.blocked('Explicit confirmation is required to execute this write operation.', {
+                required: ['confirm=true']
+            })
+        }
+
+        const pending = SupabaseTool.pendingActions.get(confirmationId)
+        if (!pending) {
+            return this.blocked('Confirmation has expired or is invalid.', { required: ['confirmationId'] })
+        }
+
+        const approved = await confirm(
+            `Update ${pending.table} (id: ${pending.id})?\n\nPrivacy: ${pending.privacyBoundary}`,
+            { title: 'Confirm Supabase Write', kind: 'warning' }
+        )
+        if (!approved) {
+            return 'User denied Supabase update.'
+        }
+
+        const { data: result, error } = await client.from(pending.table).update(pending.data).eq('id', pending.id).select()
         if (error) throw error
+        SupabaseTool.pendingActions.delete(confirmationId)
         return JSON.stringify(result, null, 2)
+    }
+
+    private blocked(message: string, details?: Record<string, any>): string {
+        return JSON.stringify({
+            error: 'EXECUTION_BLOCKED',
+            message,
+            ...details
+        }, null, 2)
+    }
+
+    private static createConfirmationId(operation: 'insert' | 'update', table: string, data: any, id: string | undefined, privacyBoundary: 'personal' | 'team'): string {
+        const confirmationId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+        this.pendingActions.set(confirmationId, {
+            operation,
+            table,
+            data,
+            id,
+            privacyBoundary,
+            expiresAt: Date.now() + this.CONFIRM_TTL_MS
+        })
+        return confirmationId
+    }
+
+    private static isConfirmationValid(id: string, operation: 'insert' | 'update'): boolean {
+        const pending = this.pendingActions.get(id)
+        if (!pending) return false
+        if (pending.operation !== operation) return false
+        if (pending.expiresAt < Date.now()) {
+            this.pendingActions.delete(id)
+            return false
+        }
+        return true
+    }
+
+    private static pruneExpiredActions() {
+        const now = Date.now()
+        for (const [id, pending] of this.pendingActions.entries()) {
+            if (pending.expiresAt < now) {
+                this.pendingActions.delete(id)
+            }
+        }
     }
 }

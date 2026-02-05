@@ -1,4 +1,5 @@
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
+import { confirm } from '@tauri-apps/plugin-dialog'
 import { useStore } from '../../store'
 
 /**
@@ -14,7 +15,19 @@ interface GitHubIssue {
     labels?: string[]
 }
 
+interface PendingGitHubAction {
+    operation: 'create_issue'
+    repo: string
+    issue: GitHubIssue
+    expiresAt: number
+}
+
 export class GitHubTool {
+    private static readonly CONFIRM_TTL_MS = 10 * 60 * 1000
+    private static pendingActions = new Map<string, PendingGitHubAction>()
+    private static readonly READ_OPERATIONS = new Set(['repos', 'issues', 'prs', 'get_file'])
+    private static readonly WRITE_OPERATIONS = new Set(['create_issue'])
+
     /**
      * Execute a GitHub operation
      * @param operation - The operation to perform (repos, issues, prs, create_issue)
@@ -22,10 +35,8 @@ export class GitHubTool {
      */
     static async execute(operation: string, args: any): Promise<string> {
         try {
+            this.pruneExpiredActions()
             const apiKey = this.getApiKey()
-            if (!apiKey) {
-                return 'GitHub is not configured. Please add your GitHub personal access token in Settings.'
-            }
 
             switch (operation) {
                 case 'repos':
@@ -53,15 +64,19 @@ export class GitHubTool {
         const username = args.username || args.user
         const limit = args.limit || 10
 
+        if (!apiKey && !username) {
+            return this.blocked(
+                'GitHub read-only access requires an explicit scope. Provide a username for public repos or configure a token.',
+                { required: ['username'] }
+            )
+        }
+
         const url = username
             ? `https://api.github.com/users/${username}/repos`
             : 'https://api.github.com/user/repos'
 
         const response = await tauriFetch(`${url}?per_page=${limit}&sort=updated`, {
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Accept': 'application/vnd.github.v3+json'
-            }
+            headers: this.getAuthHeaders(apiKey)
         })
 
         if (!response.ok) {
@@ -104,10 +119,7 @@ export class GitHubTool {
         const response = await tauriFetch(
             `https://api.github.com/repos/${repo}/issues?state=${state}&per_page=${limit}`,
             {
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
+                headers: this.getAuthHeaders(apiKey)
             }
         )
 
@@ -151,10 +163,7 @@ export class GitHubTool {
         const response = await tauriFetch(
             `https://api.github.com/repos/${repo}/pulls?state=${state}&per_page=${limit}`,
             {
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
+                headers: this.getAuthHeaders(apiKey)
             }
         )
 
@@ -189,6 +198,10 @@ export class GitHubTool {
             return 'Error: repo parameter required (format: "owner/repo")'
         }
 
+        if (!apiKey) {
+            return this.blocked('GitHub token required for write operations.', { required: ['githubApiKey'] })
+        }
+
         const issue: GitHubIssue = {
             title: args.title,
             body: args.body || args.description,
@@ -199,8 +212,51 @@ export class GitHubTool {
             return 'Error: title is required to create an issue'
         }
 
+        const phase = args.phase || 'prepare'
+        if (phase !== 'execute') {
+            const confirmationId = this.createConfirmationId('create_issue', repo, issue)
+            return JSON.stringify({
+                phase: 'prepare',
+                tool: 'github',
+                operation: 'create_issue',
+                preview: {
+                    repo,
+                    issue
+                },
+                confirmationId,
+                nextStep: 'Call create_issue with phase="execute", confirmationId, and confirm=true to create the issue.'
+            }, null, 2)
+        }
+
+        const confirmationId = args.confirmationId
+        if (!confirmationId || !this.isConfirmationValid(confirmationId, 'create_issue')) {
+            return this.blocked('Confirmation required before executing write operation.', {
+                required: ['confirmationId'],
+                nextStep: 'Call create_issue with phase="prepare" to generate a confirmationId.'
+            })
+        }
+
+        if (args.confirm !== true) {
+            return this.blocked('Explicit confirmation is required to execute this write operation.', {
+                required: ['confirm=true']
+            })
+        }
+
+        const pending = this.pendingActions.get(confirmationId)
+        if (!pending) {
+            return this.blocked('Confirmation has expired or is invalid.', { required: ['confirmationId'] })
+        }
+
+        const approved = await confirm(
+            `Create GitHub issue in ${pending.repo}?\n\nTitle: ${pending.issue.title}`,
+            { title: 'Confirm GitHub Action', kind: 'warning' }
+        )
+        if (!approved) {
+            return 'User denied GitHub issue creation.'
+        }
+
         const response = await tauriFetch(
-            `https://api.github.com/repos/${repo}/issues`,
+            `https://api.github.com/repos/${pending.repo}/issues`,
             {
                 method: 'POST',
                 headers: {
@@ -208,7 +264,7 @@ export class GitHubTool {
                     'Accept': 'application/vnd.github.v3+json',
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(issue)
+                body: JSON.stringify(pending.issue)
             }
         )
 
@@ -218,6 +274,7 @@ export class GitHubTool {
         }
 
         const data = await response.json()
+        this.pendingActions.delete(confirmationId)
         return `Issue created successfully!\n#${data.number}: ${data.title}\n${data.html_url}`
     }
 
@@ -235,10 +292,7 @@ export class GitHubTool {
         const response = await tauriFetch(
             `https://api.github.com/repos/${repo}/contents/${path}`,
             {
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
+                headers: this.getAuthHeaders(apiKey)
             }
         )
 
@@ -273,5 +327,56 @@ export class GitHubTool {
      */
     private static getApiKey(): string | null {
         return useStore.getState().settings.aiSettings.githubApiKey || null
+    }
+
+    private static getAuthHeaders(apiKey: string | null) {
+        const headers: Record<string, string> = {
+            'Accept': 'application/vnd.github.v3+json'
+        }
+        if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`
+        }
+        return headers
+    }
+
+    private static blocked(message: string, details?: Record<string, any>): string {
+        return JSON.stringify({
+            error: 'EXECUTION_BLOCKED',
+            message,
+            ...details
+        }, null, 2)
+    }
+
+    private static createConfirmationId(operation: 'create_issue', repo: string, issue: GitHubIssue): string {
+        const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+        this.pendingActions.set(id, {
+            operation,
+            repo,
+            issue,
+            expiresAt: Date.now() + this.CONFIRM_TTL_MS
+        })
+        return id
+    }
+
+    private static isConfirmationValid(id: string, operation: 'create_issue'): boolean {
+        const pending = this.pendingActions.get(id)
+        if (!pending) return false
+        if (pending.operation !== operation) return false
+        if (pending.expiresAt < Date.now()) {
+            this.pendingActions.delete(id)
+            return false
+        }
+        return true
+    }
+
+    private static pruneExpiredActions() {
+        const now = Date.now()
+        for (const [id, pending] of this.pendingActions.entries()) {
+            if (pending.expiresAt < now) {
+                this.pendingActions.delete(id)
+            }
+        }
     }
 }

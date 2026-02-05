@@ -5,6 +5,7 @@ import { TestTube, Sparkles, ChevronDown, Folder, Mic, Volume2, Mail, Globe, Ext
 import { VaultService } from '@/services/VaultService'
 import { Button } from '@/components/ui/button'
 import { AIService } from '@/services/aiService'
+import { ToolService } from '@/services/toolService'
 import { SettingsSection } from './SettingsSection'
 import { GlassSlider } from './GlassSlider'
 import { LiveThemePreview } from './LiveThemePreview'
@@ -16,6 +17,24 @@ export function SettingsPanel() {
     const [availableModels, setAvailableModels] = useState<string[]>([])
     const [showAdvanced, setShowAdvanced] = useState(false)
     const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([])
+
+    const toolStatusMap = ToolService.getToolDefinitions().reduce((acc, tool) => {
+        acc[tool.name] = tool
+        return acc
+    }, {} as Record<string, { status?: string; statusMessage?: string }>)
+
+    const statusBadge = (status?: string) => {
+        switch (status) {
+            case 'active':
+                return { label: '🟢 Active', className: 'bg-green-500/15 text-green-300 border-green-500/30' }
+            case 'limited':
+                return { label: '🟡 Limited', className: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30' }
+            case 'wip':
+                return { label: '🟠 Work in Progress', className: 'bg-orange-500/15 text-orange-300 border-orange-500/30' }
+            default:
+                return { label: '🔴 Disabled', className: 'bg-red-500/15 text-red-300 border-red-500/30' }
+        }
+    }
 
 
     // Fetch models for the default selector
@@ -533,7 +552,10 @@ export function SettingsPanel() {
                                 { id: 'file_system', name: 'File System', description: 'Read/write local files (requires confirmation)', icon: '📁' },
                                 { id: 'execute_code', name: 'Code Execution', description: 'Run Python/JS code (requires confirmation)', icon: '🚀' },
                             ].map((tool) => (
-                                <div key={tool.id} className="flex items-center justify-between glass-hover p-3 rounded-xl border border-white/5 transition-all">
+                                <div
+                                    key={tool.id}
+                                    className={`flex items-center justify-between glass-hover p-3 rounded-xl border border-white/5 transition-all ${['wip', 'disabled'].includes(toolStatusMap[tool.id]?.status || 'disabled') ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                >
                                     <div className="flex items-center gap-3">
                                         <span className="text-xl">{tool.icon}</span>
                                         <div>
@@ -541,8 +563,22 @@ export function SettingsPanel() {
                                             <p className="text-[11px] text-muted-foreground">{tool.description}</p>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => {
+                                    <div className="flex items-center gap-2">
+                                        {(() => {
+                                            const badge = statusBadge(toolStatusMap[tool.id]?.status)
+                                            return (
+                                                <span
+                                                    title={toolStatusMap[tool.id]?.statusMessage || 'Tool is disabled.'}
+                                                    className={`text-[10px] px-2 py-0.5 rounded-full border uppercase font-semibold tracking-wide ${badge.className}`}
+                                                >
+                                                    {badge.label}
+                                                </span>
+                                            )
+                                        })()}
+                                        <button
+                                            disabled={['wip', 'disabled'].includes(toolStatusMap[tool.id]?.status || 'disabled')}
+                                            onClick={() => {
+                                                if (['wip', 'disabled'].includes(toolStatusMap[tool.id]?.status || 'disabled')) return
                                             const key = tool.id as keyof typeof settings.aiSettings.toolsEnabled
                                             const currentTools = settings.aiSettings.toolsEnabled || {
                                                 web_search: true,
@@ -564,16 +600,19 @@ export function SettingsPanel() {
                                                 }
                                             })
                                         }}
-                                        className={`w-10 h-5 rounded-full relative transition-all duration-300 ${(settings.aiSettings.toolsEnabled?.[tool.id as keyof typeof settings.aiSettings.toolsEnabled] ?? true)
-                                            ? 'bg-primary-accent shadow-[0_0_10px_rgba(var(--accent-rgb),0.3)]'
-                                            : 'bg-foreground/10'
-                                            }`}
-                                    >
-                                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-300 ${(settings.aiSettings.toolsEnabled?.[tool.id as keyof typeof settings.aiSettings.toolsEnabled] ?? true)
-                                            ? 'left-6'
-                                            : 'left-1'
-                                            }`} />
-                                    </button>
+                                            className={`w-10 h-5 rounded-full relative transition-all duration-300 ${(['wip', 'disabled'].includes(toolStatusMap[tool.id]?.status || 'disabled'))
+                                                ? 'bg-foreground/10 cursor-not-allowed'
+                                                : ((settings.aiSettings.toolsEnabled?.[tool.id as keyof typeof settings.aiSettings.toolsEnabled] ?? true)
+                                                    ? 'bg-primary-accent shadow-[0_0_10px_rgba(var(--accent-rgb),0.3)]'
+                                                    : 'bg-foreground/10')
+                                                }`}
+                                        >
+                                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-300 ${(settings.aiSettings.toolsEnabled?.[tool.id as keyof typeof settings.aiSettings.toolsEnabled] ?? true)
+                                                ? 'left-6'
+                                                : 'left-1'
+                                                }`} />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -601,6 +640,23 @@ export function SettingsPanel() {
                                 <p className="text-[10px] text-muted-foreground mt-1.5 opacity-60 hover:opacity-100 transition-opacity">
                                     Get key from <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="underline hover:text-white">Google Cloud Console</a> → Enable Calendar API → Create API Key
                                 </p>
+                                <div className="mt-3">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-foreground/70 mb-2 block">Google Calendar OAuth Token (for write access)</label>
+                                    <input
+                                        type="password"
+                                        className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20"
+                                        placeholder="ya29..."
+                                        value={settings.aiSettings.googleCalendarOAuthToken || ''}
+                                        onChange={(e) =>
+                                            updateSettings({
+                                                aiSettings: { ...settings.aiSettings, googleCalendarOAuthToken: e.target.value },
+                                            })
+                                        }
+                                    />
+                                    <p className="text-[10px] text-muted-foreground mt-1.5 opacity-60 hover:opacity-100 transition-opacity">
+                                        OAuth tokens enable create/modify. API keys are read-only and limited to public calendars.
+                                    </p>
+                                </div>
                             </div>
 
                             {/* Notion */}
@@ -624,7 +680,7 @@ export function SettingsPanel() {
 
                             {/* GitHub */}
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">GitHub Personal Access Token</label>
+                                <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-2 block">GitHub Token (PAT or OAuth)</label>
                                 <input
                                     type="password"
                                     className="glass-strong w-full px-4 py-2.5 rounded-xl text-sm outline-none focus:ring-1 focus:ring-foreground/20"

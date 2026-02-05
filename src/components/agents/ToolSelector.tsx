@@ -1,5 +1,6 @@
 import { Check, AlertCircle } from 'lucide-react'
 import { useStore } from '@/store'
+import { ToolService } from '@/services/toolService'
 
 const AVAILABLE_TOOLS = [
     { id: 'web_search', name: 'Web Search', description: 'Search the internet for information' },
@@ -19,12 +20,29 @@ interface ToolSelectorProps {
 export function ToolSelector({ selectedTools, onChange }: ToolSelectorProps) {
     const { settings } = useStore()
     const { aiSettings } = settings
+    const toolStatusMap = ToolService.getToolDefinitions().reduce((acc, tool) => {
+        acc[tool.name] = tool
+        return acc
+    }, {} as Record<string, { status?: string; statusMessage?: string }>)
+
+    const statusBadge = (status?: string) => {
+        switch (status) {
+            case 'active':
+                return { label: '🟢 Active', className: 'bg-green-500/15 text-green-300 border-green-500/30' }
+            case 'limited':
+                return { label: '🟡 Limited', className: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30' }
+            case 'wip':
+                return { label: '🟠 Work in Progress', className: 'bg-orange-500/15 text-orange-300 border-orange-500/30' }
+            default:
+                return { label: '🔴 Disabled', className: 'bg-red-500/15 text-red-300 border-red-500/30' }
+        }
+    }
 
     const isConnected = (toolId: string) => {
         switch (toolId) {
             case 'notion': return !!aiSettings.notionApiKey
             case 'github': return !!aiSettings.githubApiKey
-            case 'google_calendar': return !!aiSettings.googleCalendarApiKey
+            case 'google_calendar': return !!(aiSettings.googleCalendarApiKey || aiSettings.googleCalendarOAuthToken)
             default: return true
         }
     }
@@ -46,18 +64,31 @@ export function ToolSelector({ selectedTools, onChange }: ToolSelectorProps) {
                 {AVAILABLE_TOOLS.map(tool => {
                     const isSelected = selectedTools.includes(tool.id)
                     const connected = isConnected(tool.id)
+                    const statusInfo = toolStatusMap[tool.id]
+                    const status = statusInfo?.status || 'disabled'
+                    const badge = statusBadge(status)
+                    const isUnavailable = status === 'wip' || status === 'disabled'
 
                     return (
                         <div
                             key={tool.id}
-                            onClick={() => toggleTool(tool.id)}
-                            className={`flex items-center justify-between p-3 cursor-pointer transition-colors ${isSelected ? 'bg-primary-accent/10' : 'hover:bg-white/5'}`}
+                            onClick={() => {
+                                if (isUnavailable) return
+                                toggleTool(tool.id)
+                            }}
+                            className={`flex items-center justify-between p-3 transition-colors ${isUnavailable ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} ${isSelected ? 'bg-primary-accent/10' : 'hover:bg-white/5'}`}
                         >
                             <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium">{tool.name}</span>
                                     {tool.dangerous && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Risky</span>}
                                     {tool.beta && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Beta</span>}
+                                    <span
+                                        title={statusInfo?.statusMessage || 'Tool is disabled.'}
+                                        className={`text-[10px] px-2 py-0.5 rounded-full border uppercase font-semibold tracking-wide ${badge.className}`}
+                                    >
+                                        {badge.label}
+                                    </span>
                                     {tool.integration && !connected && (
                                         <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider flex items-center gap-1">
                                             <AlertCircle className="w-3 h-3" />

@@ -373,7 +373,8 @@ The editor will open with this content pre-loaded. The user can then edit, save,
 
         const enabledTools = allTools.filter(t => {
             const setting = toolSettings[t.name as keyof typeof toolSettings]
-            return setting !== false
+            const statusAllowed = t.status === 'active' || t.status === 'limited'
+            return setting !== false && statusAllowed
         })
 
         if (enabledTools.length === 0) return []
@@ -544,7 +545,10 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         }
 
         return allTools
-            .filter(t => toolSettings[t.name as keyof typeof toolSettings] !== false)
+            .filter(t => {
+                const statusAllowed = t.status === 'active' || t.status === 'limited'
+                return toolSettings[t.name as keyof typeof toolSettings] !== false && statusAllowed
+            })
             .map(t => ({
                 name: t.name,
                 description: t.description,
@@ -656,10 +660,24 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         }
         const enabledTools = allTools.filter(t => {
             const setting = toolSettings[t.name as keyof typeof toolSettings]
-            return setting !== false // Default to true if undefined
+            const statusAllowed = t.status === 'active' || t.status === 'limited'
+            return setting !== false && statusAllowed // Default to true if undefined
         })
 
-        if (enabledTools.length === 0) return ''
+        const toolStatusSnapshot = ToolService.getToolStatusSnapshot()
+        const toolStatusJson = JSON.stringify({ tools: toolStatusSnapshot }, null, 2)
+        const toolStatusSection = `
+## TOOL_STATUS (machine-readable JSON):
+\`\`\`json
+${toolStatusJson}
+\`\`\`
+`
+
+        if (enabledTools.length === 0) {
+            return `
+${toolStatusSection}
+`
+        }
 
         const toolList = enabledTools.map(t =>
             `- ${t.name}: ${t.description}`
@@ -677,6 +695,7 @@ The editor will open with this content pre-loaded. The user can then edit, save,
 
         return `
 YOU ARE A TOOL-USING ASSISTANT. When you need external information, you MUST output a tool call.
+${toolStatusSection}
 ${connectedSection}
 ## HOW TO CALL A TOOL:
 Output this exact format (the system will execute it and return results):

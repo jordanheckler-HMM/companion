@@ -59,7 +59,7 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
   const { settings } = useStore()
 
   const connectedApps = [
-    settings.aiSettings.googleCalendarApiKey ? 'Google Calendar' : null,
+    (settings.aiSettings.googleCalendarApiKey || settings.aiSettings.googleCalendarOAuthToken) ? 'Google Calendar' : null,
     settings.aiSettings.notionApiKey ? 'Notion' : null,
     settings.aiSettings.githubApiKey ? 'GitHub' : null,
     settings.aiSettings.toolsEnabled?.supabase?.enabled ? 'Supabase' : null

@@ -20,7 +20,7 @@ export function CalendarDashboard() {
 
     useEffect(() => {
         const fetchEvents = async () => {
-            if (!settings.aiSettings.googleCalendarApiKey) return
+            if (!settings.aiSettings.googleCalendarApiKey && !settings.aiSettings.googleCalendarOAuthToken) return
 
             setLoading(true)
             try {
@@ -70,9 +70,9 @@ export function CalendarDashboard() {
         }
 
         fetchEvents()
-    }, [settings.aiSettings.googleCalendarApiKey])
+    }, [settings.aiSettings.googleCalendarApiKey, settings.aiSettings.googleCalendarOAuthToken])
 
-    if (!settings.aiSettings.googleCalendarApiKey) {
+    if (!settings.aiSettings.googleCalendarApiKey && !settings.aiSettings.googleCalendarOAuthToken) {
         return (
             <div className="h-full flex flex-col items-center justify-center p-8 text-center">
                 <div className="glass-card p-8 rounded-xl max-w-md">

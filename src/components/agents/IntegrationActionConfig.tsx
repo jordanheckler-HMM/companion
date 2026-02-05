@@ -170,7 +170,7 @@ export function IntegrationActionConfig({ integrationId, integrationAction, inte
         switch (id) {
             case 'notion': return !!settings.aiSettings.notionApiKey
             case 'github': return !!settings.aiSettings.githubApiKey
-            case 'google_calendar': return !!settings.aiSettings.googleCalendarApiKey
+            case 'google_calendar': return !!(settings.aiSettings.googleCalendarApiKey || settings.aiSettings.googleCalendarOAuthToken)
             case 'supabase': return !!settings.aiSettings.toolsEnabled?.supabase?.enabled
             default: return true
         }

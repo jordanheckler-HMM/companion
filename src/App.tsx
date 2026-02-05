@@ -310,10 +310,10 @@ function App() {
                     <p className="text-sm text-muted-foreground mb-4">
                       Sync your calendar events
                     </p>
-                    {settings.aiSettings.googleCalendarApiKey ? (
+                    {(settings.aiSettings.googleCalendarApiKey || settings.aiSettings.googleCalendarOAuthToken) ? (
                       <button
                         onClick={() => {
-                          updateSettings({ aiSettings: { ...settings.aiSettings, googleCalendarApiKey: undefined } })
+                          updateSettings({ aiSettings: { ...settings.aiSettings, googleCalendarApiKey: undefined, googleCalendarOAuthToken: undefined } })
                           removeConnectedApp('Google Calendar')
                         }}
                         className="glass-strong bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm font-medium w-full mt-auto"
@@ -442,7 +442,7 @@ function App() {
                     <p className="text-sm text-muted-foreground mb-4">
                       {activeModal === 'google_calendar' && 'Enter your Google Cloud API Key with Calendar API enabled.'}
                       {activeModal === 'notion' && 'Enter your Notion Integration Token.'}
-                      {activeModal === 'github' && 'Enter your GitHub Personal Access Token.'}
+                      {activeModal === 'github' && 'Enter your GitHub token (PAT or OAuth).'}
                     </p>
 
                     <input

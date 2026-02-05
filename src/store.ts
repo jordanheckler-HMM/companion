@@ -86,6 +86,7 @@ export interface AISettings {
   }
   // Integration Keys
   googleCalendarApiKey?: string
+  googleCalendarOAuthToken?: string
   notionApiKey?: string
   githubApiKey?: string
 }
@@ -466,6 +467,7 @@ export const useStore = create<AppState>()(
           },
           // Integration API Keys
           googleCalendarApiKey: '',
+          googleCalendarOAuthToken: '',
           notionApiKey: '',
           githubApiKey: '',
           googleApiKey: '',

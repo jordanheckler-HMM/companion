@@ -13,9 +13,14 @@ import { CreateWorkflowTool } from './tools/createWorkflowTool'
 import { ErrorLogger, ErrorSeverity } from '../utils/errorLogger'
 
 
+export type ToolStatus = 'active' | 'limited' | 'wip' | 'disabled'
+
 export interface ToolDefinition {
     name: string
     description: string
+    status?: ToolStatus
+    statusMessage?: string
+    allowedActions?: string[]
     parameters: {
         type: 'object'
         properties: Record<string, {
@@ -34,13 +39,28 @@ export interface ToolResult {
     tool: string
     result: string
     isError?: boolean
+    error?: {
+        error: 'TOOL_NOT_READY'
+        tool: string
+        status: ToolStatus
+        message: string
+    }
 }
 
 export class ToolService {
+    private static readonly DEFAULT_STATUS_MESSAGE: Record<ToolStatus, string> = {
+        active: 'Tool is active.',
+        limited: 'Tool is limited.',
+        wip: 'Tool is a work in progress.',
+        disabled: 'Tool is disabled.'
+    }
+
     private static tools: ToolDefinition[] = [
         {
             name: 'web_search',
             description: 'Search the web using DuckDuckGo to get real-time information.',
+            status: 'wip',
+            statusMessage: 'Web Search is still being finalized and cannot run yet.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -55,6 +75,7 @@ export class ToolService {
         {
             name: 'url_reader',
             description: 'Fetch and read the content of a specific URL.',
+            status: 'active',
             parameters: {
                 type: 'object',
                 properties: {
@@ -69,6 +90,7 @@ export class ToolService {
         {
             name: 'file_system',
             description: 'Perform file system operations: read, write, or list files.',
+            status: 'active',
             parameters: {
                 type: 'object',
                 properties: {
@@ -92,6 +114,7 @@ export class ToolService {
         {
             name: 'execute_code',
             description: 'Execute Python or JavaScript code locally.',
+            status: 'active',
             parameters: {
                 type: 'object',
                 properties: {
@@ -111,6 +134,8 @@ export class ToolService {
         {
             name: 'google_calendar',
             description: 'Interact with Google Calendar. CAUTION: This tool requires a Google Calendar API Key configured in Settings.',
+            status: 'wip',
+            statusMessage: 'Google Calendar integration is still in progress and cannot run yet.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -119,9 +144,30 @@ export class ToolService {
                         description: 'The operation to perform',
                         enum: ['list', 'create', 'search']
                     },
+                    phase: {
+                        type: 'string',
+                        description: 'Execution phase: discovery, prepare, execute',
+                        enum: ['discovery', 'prepare', 'execute']
+                    },
+                    confirm: {
+                        type: 'boolean',
+                        description: 'Explicit confirmation for execution'
+                    },
+                    confirmationId: {
+                        type: 'string',
+                        description: 'Confirmation ID from prepare phase'
+                    },
                     count: {
                         type: 'number',
                         description: 'Number of events to return (for list operation). Default is 10.'
+                    },
+                    calendarId: {
+                        type: 'string',
+                        description: 'Calendar ID (optional; defaults to "primary" for OAuth, required for public API key access)'
+                    },
+                    publicCalendar: {
+                        type: 'boolean',
+                        description: 'Set true to acknowledge calendar is public when using API key'
                     },
                     title: {
                         type: 'string',
@@ -139,6 +185,14 @@ export class ToolService {
                         type: 'string',
                         description: 'Event description (optional for create operation)'
                     },
+                    timeZone: {
+                        type: 'string',
+                        description: 'Event time zone (optional for create operation)'
+                    },
+                    location: {
+                        type: 'string',
+                        description: 'Event location (optional for create operation)'
+                    },
                     query: {
                         type: 'string',
                         description: 'Search query (required for search operation)'
@@ -150,6 +204,9 @@ export class ToolService {
         {
             name: 'notion',
             description: 'Interact with Notion workspace. CAUTION: This tool requires a Notion Integration Token configured in Settings.',
+            status: 'limited',
+            statusMessage: 'Notion is limited to read-only operations (search, get).',
+            allowedActions: ['search', 'get'],
             parameters: {
                 type: 'object',
                 properties: {
@@ -185,6 +242,9 @@ export class ToolService {
         {
             name: 'github',
             description: 'Interact with GitHub. CAUTION: This tool requires a GitHub Personal Access Token configured in Settings.',
+            status: 'limited',
+            statusMessage: 'GitHub is limited to read-only operations (repos, issues, prs, get_file).',
+            allowedActions: ['repos', 'issues', 'prs', 'get_file'],
             parameters: {
                 type: 'object',
                 properties: {
@@ -192,6 +252,19 @@ export class ToolService {
                         type: 'string',
                         description: 'The operation to perform',
                         enum: ['repos', 'issues', 'prs', 'create_issue', 'get_file']
+                    },
+                    phase: {
+                        type: 'string',
+                        description: 'Execution phase: discovery, prepare, execute',
+                        enum: ['discovery', 'prepare', 'execute']
+                    },
+                    confirm: {
+                        type: 'boolean',
+                        description: 'Explicit confirmation for execution'
+                    },
+                    confirmationId: {
+                        type: 'string',
+                        description: 'Confirmation ID from prepare phase'
                     },
                     repo: {
                         type: 'string',
@@ -209,6 +282,10 @@ export class ToolService {
                         type: 'string',
                         description: 'Issue/PR state (optional, default: open)',
                         enum: ['open', 'closed', 'all']
+                    },
+                    limit: {
+                        type: 'number',
+                        description: 'Number of items to return (optional, default 10)'
                     },
                     title: {
                         type: 'string',
@@ -230,6 +307,7 @@ export class ToolService {
         {
             name: 'send_notification',
             description: 'Send a native system notification to the user.',
+            status: 'active',
             parameters: {
                 type: 'object',
                 properties: {
@@ -248,6 +326,9 @@ export class ToolService {
         {
             name: 'supabase',
             description: 'Interact with a connected Supabase project (BYOK). Use this to query tables or manage data.',
+            status: 'limited',
+            statusMessage: 'Supabase is limited to read-only operations (list_tables, get_tables, get_sample_rows, count_rows, query).',
+            allowedActions: ['list_tables', 'get_tables', 'get_sample_rows', 'count_rows', 'query'],
             parameters: {
                 type: 'object',
                 properties: {
@@ -255,6 +336,28 @@ export class ToolService {
                         type: 'string',
                         description: 'The operation to perform',
                         enum: ['list_tables', 'get_tables', 'get_sample_rows', 'count_rows', 'query', 'insert', 'update']
+                    },
+                    phase: {
+                        type: 'string',
+                        description: 'Execution phase: discovery, prepare, execute',
+                        enum: ['discovery', 'prepare', 'execute']
+                    },
+                    confirm: {
+                        type: 'boolean',
+                        description: 'Explicit confirmation for execution'
+                    },
+                    confirmationId: {
+                        type: 'string',
+                        description: 'Confirmation ID from prepare phase'
+                    },
+                    privacyBoundary: {
+                        type: 'string',
+                        description: 'Privacy boundary for writes',
+                        enum: ['personal', 'team']
+                    },
+                    sync: {
+                        type: 'boolean',
+                        description: 'Explicitly confirm this write is a sync from local state'
                     },
                     table: {
                         type: 'string',
@@ -283,6 +386,7 @@ export class ToolService {
         {
             name: 'create_agent',
             description: 'Create a new specialized AI agent. Agents have their own system prompts and can be used in workflows.',
+            status: 'active',
             parameters: {
                 type: 'object',
                 properties: {
@@ -303,6 +407,7 @@ export class ToolService {
         {
             name: 'create_workflow',
             description: 'Create a new automation workflow. Workflows are pipelines of steps triggered by events or schedules.',
+            status: 'active',
             parameters: {
                 type: 'object',
                 properties: {
@@ -323,9 +428,54 @@ export class ToolService {
         }
     ]
 
+    private static normalizeTool(def: ToolDefinition): ToolDefinition {
+        const status = def.status ?? 'disabled'
+        const statusMessage = def.statusMessage ?? ToolService.DEFAULT_STATUS_MESSAGE[status]
+        return {
+            ...def,
+            status,
+            statusMessage
+        }
+    }
+
+    private static getToolDefinition(name: string): ToolDefinition | undefined {
+        return ToolService.getToolDefinitions().find(t => t.name === name)
+    }
+
+    private static getActionName(args: any): string | undefined {
+        if (!args || typeof args !== 'object') return undefined
+        if (typeof args.operation === 'string') return args.operation
+        if (typeof args.action === 'string') return args.action
+        if (typeof args.command === 'string') return args.command
+        return undefined
+    }
+
+    private static buildToolNotReadyResult(name: string, status: ToolStatus, message: string): ToolResult {
+        const payload = {
+            error: 'TOOL_NOT_READY',
+            tool: name,
+            status,
+            message
+        } as const
+        return {
+            tool: name,
+            result: JSON.stringify(payload, null, 2),
+            isError: true,
+            error: payload
+        }
+    }
 
     static getToolDefinitions(): ToolDefinition[] {
-        return this.tools
+        return this.tools.map(ToolService.normalizeTool)
+    }
+
+    static getToolStatusSnapshot(): Array<Pick<ToolDefinition, 'name' | 'status' | 'statusMessage' | 'allowedActions'>> {
+        return ToolService.getToolDefinitions().map(({ name, status, statusMessage, allowedActions }) => ({
+            name,
+            status,
+            statusMessage,
+            allowedActions
+        }))
     }
 
     static async executeTool(name: string, args: any): Promise<ToolResult> {
@@ -336,6 +486,26 @@ export class ToolService {
         if (args && typeof args === 'object') {
             if (args.arg) finalArgs = args.arg
             else if (args.arguments) finalArgs = args.arguments
+        }
+
+        const toolDefinition = ToolService.getToolDefinition(name)
+        const toolStatus = toolDefinition?.status ?? 'disabled'
+        const statusMessage = toolDefinition?.statusMessage ?? ToolService.DEFAULT_STATUS_MESSAGE[toolStatus]
+
+        if (!toolDefinition) {
+            return ToolService.buildToolNotReadyResult(name, 'disabled', 'Tool is not registered.')
+        }
+
+        if (toolStatus === 'wip' || toolStatus === 'disabled') {
+            return ToolService.buildToolNotReadyResult(name, toolStatus, statusMessage)
+        }
+
+        if (toolStatus === 'limited') {
+            const action = ToolService.getActionName(finalArgs)
+            const allowedActions = toolDefinition.allowedActions || []
+            if (!action || !allowedActions.includes(action)) {
+                return ToolService.buildToolNotReadyResult(name, toolStatus, statusMessage)
+            }
         }
 
         try {
