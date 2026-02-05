@@ -83,13 +83,13 @@ export function AgentLab() {
             )}
 
             {/* Header */}
-            <div className="glass-theme border-b border-white/10 px-6 py-8 flex items-end justify-between">
+            <div className="glass-theme border-b border-white/10 px-4 py-4 flex items-end justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                    <h2 className="text-lg font-semibold tracking-tight flex items-center gap-2">
                         <Bot className="w-6 h-6 text-primary-accent" />
                         Agent Lab
                     </h2>
-                    <p className="text-sm text-muted-foreground mt-1 text-foreground/60">
+                    <p className="text-[12px] text-muted-foreground mt-1 text-foreground/60">
                         Create autonomous agents and define their workflows
                     </p>
                 </div>
@@ -128,8 +128,8 @@ export function AgentLab() {
             </div>
 
             {/* View Toggle Bar */}
-            <div className="px-6 py-2 flex items-center justify-between bg-white/5 border-b border-white/5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <div className="px-4 py-2 flex items-center justify-between bg-white/5 border-b border-white/5">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
                     {agents.length} Agent{agents.length !== 1 ? 's' : ''} Configured
                 </div>
                 <div className="flex bg-black/40 border border-white/10 rounded-lg p-0.5">

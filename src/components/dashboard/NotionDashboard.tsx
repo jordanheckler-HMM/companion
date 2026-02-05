@@ -145,12 +145,12 @@ export function NotionDashboard() {
 
     return (
         <div className="h-full flex flex-col">
-            <div className="glass-light border-b border-white/10 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+            <div className="glass-light border-b border-white/10 px-4 py-3 flex justify-between items-center sticky top-0 z-10">
                 <div>
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <h2 className="text-base font-semibold flex items-center gap-2">
                         <span className="text-2xl">📝</span> Notion
                     </h2>
-                    <p className="text-sm text-muted-foreground">Recent pages and databases</p>
+                    <p className="text-[12px] text-muted-foreground">Recent pages and databases</p>
                 </div>
                 <button
                     onClick={() => {
@@ -162,13 +162,13 @@ export function NotionDashboard() {
                         })
                         setCurrentView('home')
                     }}
-                    className="text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full transition-colors"
+                    className="text-[10px] bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full transition-colors"
                 >
                     Search with AI
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4">
                 {loading ? (
                     <div className="flex items-center justify-center h-40">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -181,7 +181,7 @@ export function NotionDashboard() {
                 ) : items.length === 0 ? (
                     <div className="text-center text-muted-foreground py-10">No recent items found.</div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {items.map((item) => {
                             const isIndexed = indexedIds.has(item.id)
                             const isIndexing = indexingId === item.id
@@ -189,7 +189,7 @@ export function NotionDashboard() {
                             return (
                                 <div
                                     key={item.id}
-                                    className="glass-card p-4 rounded-xl hover:bg-white/5 transition-all group flex flex-col h-full relative cursor-pointer"
+                                    className="glass-card p-3 rounded-lg hover:bg-white/5 transition-all group flex flex-col h-full relative cursor-pointer"
                                     onClick={() => openUrl(item.url)}
                                 >
                                     <div className="absolute top-4 right-4 z-20 flex gap-1">

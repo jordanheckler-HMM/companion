@@ -116,12 +116,12 @@ export function GitHubDashboard() {
 
     return (
         <div className="h-full flex flex-col">
-            <div className="glass-light border-b border-white/10 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+            <div className="glass-light border-b border-white/10 px-4 py-3 flex justify-between items-center sticky top-0 z-10">
                 <div>
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <h2 className="text-base font-semibold flex items-center gap-2">
                         <span className="text-2xl">📦</span> GitHub Repositories
                     </h2>
-                    <p className="text-sm text-muted-foreground">Your recent activity</p>
+                    <p className="text-[12px] text-muted-foreground">Your recent activity</p>
                 </div>
                 <button
                     onClick={() => {
@@ -133,13 +133,13 @@ export function GitHubDashboard() {
                         })
                         setCurrentView('home')
                     }}
-                    className="text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full transition-colors"
+                    className="text-[10px] bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full transition-colors"
                 >
                     Analyze Activity
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4">
                 {loading ? (
                     <div className="flex items-center justify-center h-40">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -149,13 +149,13 @@ export function GitHubDashboard() {
                         <p>Error: {error}</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {repos.map((repo) => {
                             const isIndexed = indexedRepos.has(repo.full_name)
                             const isIndexing = indexingRepo === repo.full_name
 
                             return (
-                                <div key={repo.full_name} className="glass-card p-4 rounded-xl flex flex-col h-full hover:bg-white/5 transition-colors group relative">
+                                <div key={repo.full_name} className="glass-card p-3 rounded-lg flex flex-col h-full hover:bg-white/5 transition-colors group relative">
                                     <div className="flex justify-between items-start mb-2">
                                         <h3 className="font-semibold truncate pr-8" title={repo.name}>
                                             {repo.name}

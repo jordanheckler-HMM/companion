@@ -200,8 +200,8 @@ export function SupabaseDashboard() {
                     <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <Database className="w-8 h-8 text-emerald-400" />
                     </div>
-                    <h2 className="text-2xl font-bold">Connect Supabase</h2>
-                    <p className="text-muted-foreground">
+                    <h2 className="text-lg font-semibold">Connect Supabase</h2>
+                    <p className="text-[12px] text-muted-foreground">
                         Configure your project in Settings &gt; Integration Keys to enable database access.
                     </p>
                     <Button
@@ -218,15 +218,15 @@ export function SupabaseDashboard() {
     return (
         <div className="h-full flex flex-col bg-background/50 relative overflow-y-auto">
             {/* Header */}
-            <div className="glass-theme border-b border-white/10 px-8 py-8 flex items-center justify-between sticky top-0 z-10 backdrop-blur-md">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                        <Database className="w-8 h-8 text-emerald-400" />
+            <div className="glass-theme border-b border-white/10 px-4 py-3 flex items-center justify-between sticky top-0 z-10 backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                        <Database className="w-6 h-6 text-emerald-400" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight mb-1">Supabase</h1>
-                        <p className="text-sm text-emerald-400/80 flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <h1 className="text-xl font-semibold tracking-tight">Supabase</h1>
+                        <p className="text-[12px] text-emerald-400/80 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                             Connected to {new URL(url).hostname}
                         </p>
                     </div>
@@ -234,7 +234,7 @@ export function SupabaseDashboard() {
                 <div className="flex gap-3">
                     <Button
                         onClick={() => handleQueryAI()}
-                        className="bg-primary-accent hover:opacity-90 text-white shadow-lg shadow-primary-accent/20"
+                        className="bg-primary-accent hover:opacity-90 text-white"
                     >
                         <Search className="w-4 h-4 mr-2" />
                         Query Database with AI
@@ -242,41 +242,41 @@ export function SupabaseDashboard() {
                 </div>
             </div>
 
-            <div className="p-8 max-w-6xl mx-auto w-full space-y-8">
+            <div className="p-4 max-w-6xl mx-auto w-full space-y-5">
 
                 {/* Tables Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {tables.map((table) => (
                         <div key={table.name} className="glass-card group hover:border-emerald-500/30 transition-all duration-300">
-                            <div className="p-6">
-                                <div className="flex items-start justify-between mb-4">
+                            <div className="p-4">
+                                <div className="flex items-start justify-between mb-3">
                                     <div className="flex items-center gap-3">
                                         <div className="p-2 rounded-lg bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors">
                                             <TableIcon className="w-5 h-5 text-emerald-400" />
                                         </div>
                                         <div>
-                                            <h3 className="font-semibold text-lg">{table.name}</h3>
-                                            <p className="text-xs text-muted-foreground">{table.rowCount} rows</p>
+                                            <h3 className="font-semibold text-base">{table.name}</h3>
+                                            <p className="text-[11px] text-muted-foreground">{table.rowCount} rows</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1">
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-8 w-8 text-muted-foreground hover:text-emerald-400"
+                                            className="h-7 w-7 text-muted-foreground hover:text-emerald-400"
                                             onClick={() => handleQueryAI(table.name)}
                                             title="Query with AI"
                                         >
-                                            <Play className="w-4 h-4" />
+                                            <Play className="w-3.5 h-3.5" />
                                         </Button>
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                                            className="h-7 w-7 text-muted-foreground hover:text-red-400"
                                             onClick={() => handleRemoveTable(table.name)}
                                             title="Remove table"
                                         >
-                                            <X className="w-4 h-4" />
+                                            <X className="w-3.5 h-3.5" />
                                         </Button>
                                     </div>
                                 </div>
@@ -285,7 +285,7 @@ export function SupabaseDashboard() {
                                     <Button
                                         variant="secondary"
                                         size="sm"
-                                        className="w-full text-xs bg-white/5 hover:bg-white/10"
+                                        className="w-full text-[11px] bg-white/5 hover:bg-white/10"
                                         onClick={() => handlePreview(table.name)}
                                     >
                                         <Eye className="w-3 h-3 mr-2" />
@@ -294,7 +294,7 @@ export function SupabaseDashboard() {
                                     <Button
                                         variant="secondary"
                                         size="sm"
-                                        className="w-full text-xs bg-white/5 hover:bg-white/10"
+                                        className="w-full text-[11px] bg-white/5 hover:bg-white/10"
                                         onClick={(e) => handleIndexTable(e, table.name)}
                                         disabled={indexingTable === table.name}
                                     >
@@ -310,7 +310,7 @@ export function SupabaseDashboard() {
 
                             {/* Preview Section - Expands when active */}
                             {activeTable === table.name && previewData && (
-                                <div className="border-t border-white/5 bg-black/20 p-4 animate-in slide-in-from-top-2 overflow-x-auto">
+                                <div className="border-t border-white/5 bg-black/20 p-3 animate-in slide-in-from-top-2 overflow-x-auto">
                                     <table className="w-full text-xs text-left">
                                         <thead className="text-muted-foreground border-b border-white/5">
                                             <tr>

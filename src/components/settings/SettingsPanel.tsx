@@ -113,18 +113,18 @@ export function SettingsPanel() {
 
     return (
         <div className="h-full overflow-y-auto">
-            <div className="glass-theme border-b border-white/10 px-6 py-8">
-                <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
-                <p className="text-sm text-muted-foreground mt-1 text-foreground/60">Configure your companion and appearance</p>
+            <div className="glass-theme border-b border-white/10 px-4 py-4">
+                <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
+                <p className="text-[12px] text-muted-foreground text-foreground/60">Configure your companion and appearance</p>
             </div>
 
-            <div className="p-6 pb-20">
-                <div className="max-w-3xl space-y-8">
+            <div className="p-4 pb-16">
+                <div className="max-w-3xl space-y-6">
 
                     {/* VISUAL STYLE SECTION */}
                     <SettingsSection title="Appearance" defaultOpen={false}>
-                        <div className="space-y-6 bg-foreground/5 p-5 rounded-2xl border border-foreground/5">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4 bg-foreground/5 p-4 rounded-2xl border border-foreground/5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs font-bold uppercase tracking-widest text-foreground/70 mb-3 block">Theme Mode</label>
                                     <div className="flex bg-foreground/5 p-1 rounded-xl">

@@ -93,25 +93,25 @@ export function CalendarDashboard() {
 
     return (
         <div className="h-full flex flex-col">
-            <div className="glass-light border-b border-white/10 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+            <div className="glass-light border-b border-white/10 px-4 py-3 flex justify-between items-center sticky top-0 z-10">
                 <div>
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <h2 className="text-base font-semibold flex items-center gap-2">
                         <span className="text-2xl">📅</span> Your Schedule
                     </h2>
-                    <p className="text-sm text-muted-foreground">Upcoming events</p>
+                    <p className="text-[12px] text-muted-foreground">Upcoming events</p>
                 </div>
                 <button
                     onClick={() => {
                         addMessage({ role: 'user', content: "Summarize my day based on my calendar" })
                         setCurrentView('home')
                     }}
-                    className="text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full transition-colors"
+                    className="text-[10px] bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full transition-colors"
                 >
                     Brief Me
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4">
                 {loading ? (
                     <div className="flex items-center justify-center h-40">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -126,9 +126,9 @@ export function CalendarDashboard() {
                 ) : events.length === 0 ? (
                     <div className="text-center text-muted-foreground py-10">No upcoming events found.</div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         {events.map((event, i) => (
-                            <div key={i} className="glass-card p-4 rounded-xl flex gap-4 hover:bg-white/5 transition-colors">
+                            <div key={i} className="glass-card p-3 rounded-lg flex gap-3 hover:bg-white/5 transition-colors">
                                 <div className="flex-shrink-0 w-16 text-center pt-1">
                                     <div className="text-sm font-bold uppercase text-red-400">
                                         {new Date(event.start).toLocaleDateString(undefined, { month: 'short' })}

@@ -67,11 +67,11 @@ function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div
       className={cn(
-        'flex gap-3 mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300 group',
+        'flex gap-2 mb-2 animate-in fade-in slide-in-from-bottom-2 duration-300 group',
         isUser ? 'flex-row-reverse' : 'flex-row'
       )}
     >
-      <Avatar className="h-8 w-8 flex-shrink-0 border border-white/10 overflow-hidden relative bg-black">
+      <Avatar className="h-7 w-7 flex-shrink-0 border border-white/10 overflow-hidden relative bg-black">
         {!isUser && (
           <>
             <img src={logo} alt="Assistant" className="h-full w-full object-cover scale-110 mix-blend-screen" />
@@ -92,16 +92,16 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
       <div
         className={cn(
-          'px-4 py-3 rounded-2xl max-w-[85%] shadow-lg transition-all duration-200 relative overflow-hidden group/bubble',
+          'px-3 py-2 rounded-xl max-w-[82%] transition-all duration-200 relative overflow-hidden group/bubble',
           isUser ? 'glass-message-user' : 'glass-message',
           !isUser && message.status === 'thinking' && 'animate-shimmer'
         )}
       >
         {!isUser && message.status === 'thinking' && (
-          <div className="flex gap-1.5 items-center py-1 mb-2">
-            <div className="w-2 h-2 rounded-full bg-foreground/60 animate-thinking-dot" />
-            <div className="w-2 h-2 rounded-full bg-foreground/60 animate-thinking-dot" style={{ animationDelay: '0.2s' }} />
-            <div className="w-2 h-2 rounded-full bg-foreground/60 animate-thinking-dot" style={{ animationDelay: '0.4s' }} />
+          <div className="flex gap-1 items-center py-0.5 mb-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-foreground/60 animate-thinking-dot" />
+            <div className="w-1.5 h-1.5 rounded-full bg-foreground/60 animate-thinking-dot" style={{ animationDelay: '0.2s' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-foreground/60 animate-thinking-dot" style={{ animationDelay: '0.4s' }} />
           </div>
         )}
 
@@ -112,7 +112,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
                 key={i}
                 src={img}
                 alt="User upload"
-                className="max-w-full max-h-[300px] rounded-lg border border-white/10 object-contain"
+                className="max-w-full max-h-[240px] rounded-md border border-white/10 object-contain"
               />
             ))}
           </div>
@@ -120,7 +120,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
         {message.content && (
           <div className={cn(
-            "prose prose-sm max-w-none break-words",
+            "prose prose-sm max-w-none break-words text-[13px] leading-[1.45]",
             (settings.theme === 'dark' || settings.theme.startsWith('glass')) ? "prose-invert" : "prose-zinc"
           )}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -131,35 +131,35 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
         {/* Message Actions - Now below the message */}
         <div className={cn(
-          "flex gap-1 mt-2 mb-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity justify-end",
+          "flex gap-1 mt-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity justify-end",
           isUser ? "flex-row-reverse" : "flex-row"
         )}>
           <button
             onClick={handleCopy}
-            className="p-1 px-2 rounded-md bg-black/40 hover:bg-black/60 border border-white/10 text-white/50 hover:text-white transition-all flex items-center gap-1.5"
+            className="px-1.5 py-0.5 rounded-md bg-black/30 hover:bg-black/50 border border-white/10 text-white/50 hover:text-white transition-all flex items-center gap-1"
             title="Copy message"
           >
             {isCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-            <span className="text-[10px] font-bold uppercase tracking-wider">Copy</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider">Copy</span>
           </button>
           {!isUser && (
             <button
               onClick={handleSpeak}
               className={cn(
-                "p-1 px-2 rounded-md border border-white/10 transition-all flex items-center gap-1.5",
+                "px-1.5 py-0.5 rounded-md border border-white/10 transition-all flex items-center gap-1",
                 isSpeaking
-                  ? "bg-primary-accent text-white shadow-lg shadow-primary-accent/40"
-                  : "bg-black/40 hover:bg-black/60 text-white/50 hover:text-white"
+                  ? "bg-primary-accent text-white"
+                  : "bg-black/30 hover:bg-black/50 text-white/50 hover:text-white"
               )}
               title={isSpeaking ? "Stop speaking" : "Speak message"}
             >
               <Volume2 className={cn("h-3 w-3", isSpeaking && "animate-pulse")} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">{isSpeaking ? 'Stop' : 'Speak'}</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider">{isSpeaking ? 'Stop' : 'Speak'}</span>
             </button>
           )}
         </div>
         <div className="flex items-center justify-between mt-2 gap-4">
-          <span className="text-[10px] text-foreground/40 font-medium block">
+          <span className="text-[9px] text-foreground/40 font-medium block">
             {new Date(message.timestamp).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
@@ -167,14 +167,14 @@ function MessageBubble({ message }: MessageBubbleProps) {
           </span>
 
           {!isUser && message.modelLabel && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/5 border border-white/5 group-hover:border-white/10 transition-colors">
+            <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md bg-white/5 border border-white/5 group-hover:border-white/10 transition-colors">
               {/* Check provider type from registry if possible, else fallback to cloud icon */}
               {settings.aiSettings.intelligenceMode === 'cloud' || (message.modelId && message.modelId.includes('gpt') || message.modelId?.includes('claude')) ? (
                 <Cloud className="h-2.5 w-2.5 text-blue-400/70" />
               ) : (
                 <Home className="h-2.5 w-2.5 text-green-400/70" />
               )}
-              <span className="text-[9px] font-bold uppercase tracking-widest text-foreground/50 whitespace-nowrap">
+              <span className="text-[8px] font-bold uppercase tracking-widest text-foreground/50 whitespace-nowrap">
                 {message.modelLabel}
               </span>
             </div>
@@ -960,14 +960,14 @@ export function ChatWindow() {
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
+        className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
       >
         {messages.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
             <OllamaInstaller />
             <div className="max-w-md text-center animate-in fade-in zoom-in duration-700 delay-200">
-              <h2 className="text-3xl font-bold tracking-tight mb-2">Hello, I'm {settings.assistantName}</h2>
-              <p className="text-muted-foreground">Your privacy-first AI companion. How can I help you today?</p>
+              <h2 className="text-xl font-semibold tracking-tight mb-1.5">Hello, I'm {settings.assistantName}</h2>
+              <p className="text-[12px] text-muted-foreground">Your privacy-first AI companion. How can I help you today?</p>
             </div>
           </div>
         )}
@@ -980,7 +980,7 @@ export function ChatWindow() {
       </div>
 
       {/* Input Bar */}
-      <div className="glass-input border-t border-white/20 px-6 py-4">
+      <div className="glass-input border-t border-white/20 px-4 py-3">
         {/* Knowledge Base Indicator */}
         {(() => {
           // Extract unique valid sources
@@ -1001,9 +1001,9 @@ export function ChatWindow() {
           if (validSources.length === 0) return null
 
           return (
-            <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-              <Database className="h-4 w-4 text-emerald-400" />
-              <span className="text-sm text-emerald-300 flex-1 truncate">
+            <div className="flex items-center gap-2 mb-2.5 px-2 py-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+              <Database className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="text-[12px] text-emerald-300 flex-1 truncate">
                 {`${validSources.length} source${validSources.length > 1 ? 's' : ''} indexed: ${validSources.slice(0, 3).join(', ')}${validSources.length > 3 ? '...' : ''}`}
               </span>
             </div>
@@ -1012,13 +1012,13 @@ export function ChatWindow() {
 
         {/* Pending Files Preview */}
         {pendingFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-2.5">
             {pendingFiles.map((file, index) => (
               <div
                 key={index}
-                className="glass px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm border border-white/20"
+                className="glass px-2.5 py-1 rounded-md flex items-center gap-2 text-[12px] border border-white/20"
               >
-                <Paperclip className="h-3.5 w-3.5 opacity-60" />
+                <Paperclip className="h-3 w-3 opacity-60" />
                 <span className="font-medium">{file.name}</span>
                 <button
                   onClick={() => removePendingFile(index)}
@@ -1034,11 +1034,11 @@ export function ChatWindow() {
 
         {/* Pending Context Preview (AI Prompts from Integrations) */}
         {pendingContext.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-2.5">
             {pendingContext.map((ctx) => (
               <div
                 key={ctx.id}
-                className="glass px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm border border-blue-500/30 bg-blue-500/10"
+                className="glass px-2.5 py-1 rounded-md flex items-center gap-2 text-[12px] border border-blue-500/30 bg-blue-500/10"
               >
                 <span className="text-blue-400">{ctx.title}</span>
                 <button
@@ -1054,7 +1054,7 @@ export function ChatWindow() {
         )}
 
         {/* Input Area */}
-        <div className="flex gap-3 items-end max-w-4xl mx-auto">
+        <div className="flex gap-2 items-end max-w-4xl mx-auto">
           {/* Attachments & Tools */}
           <div className="flex flex-col gap-2">
             <Button
@@ -1062,14 +1062,14 @@ export function ChatWindow() {
               size="icon"
               onClick={() => setUseVault(!useVault)}
               className={cn(
-                "h-10 w-10 rounded-xl transition-all",
+                "h-9 w-9 rounded-lg transition-all",
                 useVault
                   ? "bg-purple-500/20 text-purple-400 border-purple-500/50 hover:bg-purple-500/30"
                   : "bg-white/5 border-white/10 hover:bg-white/10 opacity-70 hover:opacity-100"
               )}
               title={useVault ? "Vault RAG Enabled" : "Vault RAG Disabled"}
             >
-              <Brain className="h-5 w-5" />
+              <Brain className="h-4 w-4" />
             </Button>
 
             <input
@@ -1087,7 +1087,7 @@ export function ChatWindow() {
               onClick={() => fileInputRef.current?.click()}
               title="Attach file"
             >
-              <Paperclip className="h-4 w-4" />
+              <Paperclip className="h-3.5 w-3.5" />
             </Button>
 
             <Button
@@ -1097,7 +1097,7 @@ export function ChatWindow() {
               onClick={handleNativeFileOpen}
               title="Open in editor"
             >
-              <FileEdit className="h-4 w-4" />
+              <FileEdit className="h-3.5 w-3.5" />
             </Button>
 
             {/* Voice Recording Button */}
@@ -1114,9 +1114,9 @@ export function ChatWindow() {
                 disabled={isSpeaking}
               >
                 {isRecording ? (
-                  <MicOff className="h-4 w-4 text-red-400" />
+                  <MicOff className="h-3.5 w-3.5 text-red-400" />
                 ) : (
-                  <Mic className="h-4 w-4" />
+                  <Mic className="h-3.5 w-3.5" />
                 )}
               </Button>
             )}
@@ -1130,7 +1130,7 @@ export function ChatWindow() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="glass flex-1 border-white/20 focus-visible:border-white/40 h-11"
+            className="glass flex-1 border-white/20 focus-visible:border-white/40 h-9"
             disabled={isLoading}
           />
 
@@ -1142,19 +1142,19 @@ export function ChatWindow() {
               color: (input.trim() || pendingFiles.length > 0 || isLoading) ? 'white' : undefined
             }}
             className={cn(
-              "flex-shrink-0 h-11 w-11 transition-all duration-300",
-              (input.trim() || pendingFiles.length > 0 || isLoading) ? "shadow-[0_0_20px_rgba(var(--accent-rgb),0.4)]" : "glass-strong"
+              "flex-shrink-0 h-9 w-9 transition-all duration-300 border border-white/10",
+              (input.trim() || pendingFiles.length > 0 || isLoading) ? "bg-accent text-white" : "glass-strong"
             )}
             disabled={!input.trim() && pendingFiles.length === 0 && !isLoading}
           >
             {isLoading ? (
-              <Square className="h-4 w-4 fill-current" />
+              <Square className="h-3.5 w-3.5 fill-current" />
             ) : (
-              <Send className="h-4 w-4" />
+              <Send className="h-3.5 w-3.5" />
             )}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-2 px-1">
+        <p className="text-[11px] text-muted-foreground mt-2 px-1">
           Press Enter to send, Shift + Enter for new line
         </p>
       </div>

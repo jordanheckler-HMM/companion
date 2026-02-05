@@ -224,9 +224,9 @@ function App() {
 
             // ... existing files content ...
             <div className="h-full overflow-y-auto">
-              <div className="glass-light border-b border-white/10 px-6 py-4 sticky top-0 z-10">
-                <h2 className="text-lg font-semibold">Files</h2>
-                <p className="text-sm text-muted-foreground">Manage your documents and knowledge base</p>
+              <div className="glass-light border-b border-white/10 px-4 py-3 sticky top-0 z-10">
+                <h2 className="text-base font-semibold">Files</h2>
+                <p className="text-[12px] text-muted-foreground">Manage your documents and knowledge base</p>
               </div>
               <FileGrid
                 files={files}
@@ -297,17 +297,17 @@ function App() {
 
           {currentView === 'integrations' && (
             <div className="h-full overflow-y-auto">
-              <div className="glass-light border-b border-white/10 px-6 py-4">
-                <h2 className="text-lg font-semibold">Integrations</h2>
-                <p className="text-sm text-muted-foreground">Connect your apps</p>
+              <div className="glass-light border-b border-white/10 px-4 py-3">
+                <h2 className="text-base font-semibold">Integrations</h2>
+                <p className="text-[12px] text-muted-foreground">Connect your apps</p>
               </div>
-              <div className="p-6">
+              <div className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* Google Calendar */}
-                  <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
+                  <div className="glass-card rounded-lg p-4 text-center flex flex-col items-center">
                     <div className="text-4xl mb-3">📅</div>
-                    <h3 className="font-semibold mb-2">Google Calendar</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <h3 className="font-semibold mb-1.5">Google Calendar</h3>
+                    <p className="text-[12px] text-muted-foreground mb-3">
                       Sync your calendar events
                     </p>
                     {(settings.aiSettings.googleCalendarApiKey || settings.aiSettings.googleCalendarOAuthToken) ? (
@@ -331,10 +331,10 @@ function App() {
                   </div>
 
                   {/* Notion */}
-                  <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
+                  <div className="glass-card rounded-lg p-4 text-center flex flex-col items-center">
                     <div className="text-4xl mb-3">📝</div>
-                    <h3 className="font-semibold mb-2">Notion</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <h3 className="font-semibold mb-1.5">Notion</h3>
+                    <p className="text-[12px] text-muted-foreground mb-3">
                       Access your workspace
                     </p>
                     {settings.aiSettings.notionApiKey ? (
@@ -358,10 +358,10 @@ function App() {
                   </div>
 
                   {/* GitHub */}
-                  <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
+                  <div className="glass-card rounded-lg p-4 text-center flex flex-col items-center">
                     <div className="text-4xl mb-3">💻</div>
-                    <h3 className="font-semibold mb-2">GitHub</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <h3 className="font-semibold mb-1.5">GitHub</h3>
+                    <p className="text-[12px] text-muted-foreground mb-3">
                       Manage repositories
                     </p>
                     {settings.aiSettings.githubApiKey ? (
@@ -385,10 +385,10 @@ function App() {
                   </div>
 
                   {/* Supabase */}
-                  <div className="glass-card rounded-xl p-6 text-center flex flex-col items-center">
+                  <div className="glass-card rounded-lg p-4 text-center flex flex-col items-center">
                     <div className="text-4xl mb-3">⚡</div>
-                    <h3 className="font-semibold mb-2">Supabase</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <h3 className="font-semibold mb-1.5">Supabase</h3>
+                    <p className="text-[12px] text-muted-foreground mb-3">
                       Connect your database
                     </p>
                     {settings.aiSettings.toolsEnabled?.supabase?.enabled && settings.aiSettings.toolsEnabled?.supabase?.supabaseUrl ? (

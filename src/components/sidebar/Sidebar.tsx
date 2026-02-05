@@ -22,7 +22,7 @@ function NavItem({ icon: Icon, label, collapsed, active, onClick }: NavItemProps
     <button
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-all text-sm font-medium relative group',
+        'flex items-center gap-2 w-full px-2.5 py-2 rounded-md transition-all text-[12px] font-medium relative group',
         'hover:glass hover:text-foreground',
         active && 'glass text-foreground',
         !active && 'text-muted-foreground',
@@ -31,11 +31,11 @@ function NavItem({ icon: Icon, label, collapsed, active, onClick }: NavItemProps
     >
       {active && (
         <div
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full"
           style={{ backgroundColor: 'rgb(var(--accent-rgb))' }}
         />
       )}
-      <Icon className={cn("h-4 w-4 flex-shrink-0", active && "text-[rgb(var(--accent-rgb))]")} />
+      <Icon className={cn("h-3.5 w-3.5 flex-shrink-0", active && "text-[rgb(var(--accent-rgb))]")} />
       {!collapsed && <span className="truncate">{label}</span>}
     </button>
   )
@@ -69,16 +69,16 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'h-screen glass-sidebar transition-all duration-300 flex flex-col border-r border-white/10 relative z-[70] flex-shrink-0',
-        collapsed ? 'w-16' : 'w-64'
+        'h-screen glass-sidebar transition-all duration-300 flex flex-col border-r border-white/10 relative z-[70] flex-shrink-0 overflow-hidden',
+        collapsed ? 'w-14' : 'w-56 min-w-[180px] max-w-[280px] resize-x'
       )}
     >
       {/* Header */}
       <div className={cn(
-        "p-4 border-b border-white/10 flex items-center gap-3",
-        collapsed && "flex-col px-2 py-6 gap-4"
+        "p-3 border-b border-white/10 flex items-center gap-2",
+        collapsed && "flex-col px-2 py-4 gap-3"
       )}>
-        <div className="h-8 w-8 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center relative bg-black shadow-lg border border-white/20">
+        <div className="h-7 w-7 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center relative bg-black border border-white/15">
           <img
             src={logo}
             alt="Logo"
@@ -87,21 +87,21 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
           <div className="absolute inset-0 bg-accent mix-blend-color opacity-70 pointer-events-none" />
         </div>
         {!collapsed && (
-          <h1 className="font-bold text-lg transition-opacity duration-300 truncate">
+          <h1 className="font-semibold text-base transition-opacity duration-300 truncate">
             Companion
           </h1>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            "glass-hover p-1.5 rounded-md transition-all",
+            "glass-hover p-1 rounded-md transition-all",
             !collapsed && "ml-auto"
           )}
         >
           {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3.5 w-3.5" />
           ) : (
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3.5 w-3.5" />
           )}
         </button>
       </div>
@@ -160,8 +160,8 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
 
         {/* Connected Apps Section */}
         {connectedApps.length > 0 && !collapsed && (
-          <div className="px-3 py-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="px-2.5 py-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
               Connected
             </p>
           </div>
@@ -199,8 +199,8 @@ export function Sidebar({ currentView = 'home', onViewChange }: SidebarProps) {
           className="w-full glass-hover justify-start"
           onClick={() => onViewChange?.('settings')}
         >
-          <Settings className="h-4 w-4" />
-          {!collapsed && <span className="ml-2">Settings</span>}
+          <Settings className="h-3.5 w-3.5" />
+          {!collapsed && <span className="ml-2 text-[12px]">Settings</span>}
         </Button>
       </div>
     </aside>

@@ -53,11 +53,11 @@
   .glass-theme {
     --background: transparent;
     --foreground: 0 0% 98%;
-    --glass-opacity: 0.1;
-    --glass-blur: 16px;
-    --glass-border-opacity: 0.15;
+    --glass-opacity: 0.08;
+    --glass-blur: 14px;
+    --glass-border-opacity: 0.12;
     --glass-bg: 255 255 255;
-    --glass-tint-weight: 0.3;
+    --glass-tint-weight: 0.2;
     --accent: var(--accent-rgb);
     --card: 0 0% 100% / 0.1;
     --popover: 0 0% 0% / 0.8;
@@ -102,16 +102,20 @@
     @apply border-border;
   }
 
+  html {
+    font-size: 14px;
+  }
+
   body {
-    @apply bg-background text-foreground transition-colors duration-500;
+    @apply bg-background text-foreground transition-colors duration-500 text-[14px] leading-[1.45];
   }
 
   .glass-theme body {
     background-color: transparent !important;
     background-image:
-      radial-gradient(at 0% 0%, rgba(var(--accent-rgb), 0.15) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(var(--accent-rgb), 0.1) 0px, transparent 50%),
-      radial-gradient(at 50% 50%, rgba(var(--accent-rgb), 0.05) 0px, transparent 100%);
+      radial-gradient(at 0% 0%, rgba(var(--accent-rgb), 0.08) 0px, transparent 55%),
+      radial-gradient(at 100% 100%, rgba(var(--accent-rgb), 0.06) 0px, transparent 55%),
+      radial-gradient(at 50% 50%, rgba(var(--accent-rgb), 0.03) 0px, transparent 100%);
     background-attachment: fixed;
   }
 }
@@ -130,8 +134,8 @@
 
   /* Glassmorphism utilities */
   .glass {
-    @apply backdrop-blur-md border border-foreground/10;
-    background-color: hsla(var(--background) / 0.4);
+    @apply backdrop-blur-sm border border-foreground/10;
+    background-color: hsla(var(--background) / 0.35);
   }
 
   .glass-theme .glass {
@@ -161,17 +165,17 @@
 
   .glass-light {
     @apply backdrop-blur-sm border border-foreground/5;
-    background-color: hsla(var(--background) / 0.2);
+    background-color: hsla(var(--background) / 0.18);
   }
 
   .glass-strong {
-    @apply backdrop-blur-xl border border-foreground/20;
-    background-color: hsla(var(--background) / 0.6);
+    @apply backdrop-blur-md border border-foreground/15;
+    background-color: hsla(var(--background) / 0.5);
   }
 
   .glass-modal {
-    @apply backdrop-blur-2xl border border-foreground/20 shadow-2xl;
-    background-color: hsla(var(--background) / 0.8);
+    @apply backdrop-blur-xl border border-foreground/20;
+    background-color: hsla(var(--background) / 0.78);
   }
 
   /* Glass hover effects */
@@ -189,9 +193,8 @@
   }
 
   .glass-message-user {
-    background-color: rgba(var(--accent-rgb), 0.25);
-    @apply backdrop-blur-lg border border-foreground/30 shadow-lg text-white;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    background-color: rgba(var(--accent-rgb), 0.18);
+    @apply backdrop-blur-md border border-foreground/25 text-white;
   }
 
   /* File card glass */
@@ -204,26 +207,26 @@
   }
 
   .glass-card:hover {
-    @apply border-foreground/20;
-    background-color: hsla(var(--background) / 0.5);
+    @apply border-foreground/15;
+    background-color: hsla(var(--background) / 0.45);
   }
 
   /* Input bar glass */
   .glass-input {
-    @apply backdrop-blur-xl border-t border-foreground/10 shadow-xl;
-    background-color: hsla(var(--background) / 0.5);
+    @apply backdrop-blur-md border-t border-foreground/10;
+    background-color: hsla(var(--background) / 0.45);
   }
 
   /* Sidebar glass */
   .glass-sidebar {
     @apply backdrop-blur-sm border-r border-foreground/10;
-    background-color: hsla(var(--background) / 0.2);
+    background-color: hsla(var(--background) / 0.16);
   }
 
   /* Toast glass */
   .glass-toast {
-    @apply backdrop-blur-2xl border border-foreground/20 shadow-2xl;
-    background-color: hsla(var(--background) / 0.8);
+    @apply backdrop-blur-xl border border-foreground/20;
+    background-color: hsla(var(--background) / 0.78);
   }
 
   /* Thinking Animations */
