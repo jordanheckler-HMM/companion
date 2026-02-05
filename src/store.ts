@@ -379,10 +379,18 @@ export const useStore = create<AppState>()(
         }))
         return id
       },
-      updateMessage: (id, content, status, modelId) =>
+      updateMessage: (id, content, status, modelId, modelLabel) =>
         set((state) => ({
           messages: state.messages.map((m) =>
-            m.id === id ? { ...m, content, ...(status ? { status } : {}), ...(modelId ? { modelId } : {}) } : m
+            m.id === id
+              ? {
+                ...m,
+                content,
+                ...(status ? { status } : {}),
+                ...(modelId ? { modelId } : {}),
+                ...(modelLabel ? { modelLabel } : {}),
+              }
+              : m
           ),
         })),
       clearMessages: () =>
@@ -716,8 +724,17 @@ export const useStore = create<AppState>()(
               console.log('Migrating legacy settings to new architecture...')
               updates.aiSettings = {
                 ...ai,
-                intelligenceMode: ai.providerType === 'local' ? 'standard' : 'premium',
+                intelligenceMode: ai.providerType === 'local' ? 'local' : 'cloud',
                 preferredModelId: ai.providerType === 'local' ? ai.ollamaModel : ai.cloudModel
+              }
+              needsUpdate = true
+            }
+
+            if (ai?.intelligenceMode === 'standard' || ai?.intelligenceMode === 'premium') {
+              console.log('Migrating legacy intelligenceMode values...')
+              updates.aiSettings = {
+                ...(updates.aiSettings || ai),
+                intelligenceMode: ai.intelligenceMode === 'standard' ? 'local' : 'cloud'
               }
               needsUpdate = true
             }

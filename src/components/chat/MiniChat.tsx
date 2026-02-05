@@ -104,7 +104,7 @@ export const MiniChat = () => {
                     fullContent += chunk
                     updateMiniMessage(assistantId, fullContent, 'done')
                 },
-                settings.aiSettings.preferredModelId
+                activeModel?.id || settings.aiSettings.preferredModelId
             )
 
             if (!fullContent) {

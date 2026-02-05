@@ -381,9 +381,11 @@ export function ChatWindow() {
       // Just text attachments, no user message body -> do nothing extra, attachments handled above
     }
 
-    // Clear pending context after collecting prompts
-    if (pendingPrompts.length > 0) {
-      clearPendingContext()
+    const consumedContextIds = new Set(
+      [...pendingPrompts, ...tableContexts].map(ctx => ctx.id)
+    )
+    if (consumedContextIds.size > 0) {
+      consumedContextIds.forEach(id => removePendingContext(id))
     }
 
     // Create a placeholder for assistant message
@@ -405,13 +407,20 @@ export function ChatWindow() {
       const ragService = new RAGService(settings.aiSettings)
 
       // Determine model using QueryRouter
+      const toolsEnabled = settings.aiSettings.toolsEnabled
+        ? Object.entries(settings.aiSettings.toolsEnabled).some(([key, value]) => {
+          if (key === 'supabase') return !!(value as { enabled?: boolean } | undefined)?.enabled
+          return value === true
+        })
+        : false
+
       const selectedModelId = QueryRouter.selectModel(
         settings.aiSettings.intelligenceMode,
         settings.aiSettings.preferredModelId,
         {
           input: fullUserMessage,
           attachmentCount: pendingFiles.length,
-          toolsEnabled: true, // Simplified for routing
+          toolsEnabled,
           hasImages: imageFiles.length > 0
         }
       )
