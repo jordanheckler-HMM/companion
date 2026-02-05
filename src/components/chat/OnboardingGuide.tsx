@@ -46,7 +46,7 @@ export function OnboardingGuide() {
         checkOllama()
         const interval = setInterval(checkOllama, 5000)
         return () => clearInterval(interval)
-    }, [settings.aiSettings.ollamaUrl])
+    }, [settings.aiSettings.ollamaUrl, setAvailableModels])
 
     const handlePullModel = async (modelName: string) => {
         setPulling(modelName)

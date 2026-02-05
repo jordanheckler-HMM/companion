@@ -78,7 +78,7 @@ The editor will open with this content pre-loaded. The user can then edit, save,
                 toolSystemMsg,
                 AIService.EDITOR_INSTRUCTIONS
             ].filter(Boolean).join('\n\n')
-            let currentMessages = [...messages]
+            const currentMessages = [...messages]
 
             // Find system message or add one
             const systemMsgIndex = currentMessages.findIndex(m => m.role === 'system')
@@ -754,7 +754,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                 toolSystemMsg,
                 AIService.EDITOR_INSTRUCTIONS
             ].filter(Boolean).join('\n\n')
-            let currentMessages = [...messages]
+            const currentMessages = [...messages]
 
             // Find system message or add one
             const systemMsgIndex = currentMessages.findIndex(m => m.role === 'system')
@@ -764,7 +764,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                 currentMessages.unshift({ role: 'system', content: injectedContext })
             }
 
-            let maxIterations = 3 // Reduced from 5
+            const maxIterations = 3 // Reduced from 5
             let iterationCount = 0
 
             while (iterationCount < maxIterations) {

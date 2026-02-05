@@ -15,7 +15,7 @@ interface TableInfo {
 }
 
 export function SupabaseDashboard() {
-    const { settings, updateSettings, setCurrentView, addKnowledgeChunks, removeKnowledgeChunksByFileId, addConnectedApp, removeConnectedApp, connectedApps } = useStore()
+    const { settings, setCurrentView, addKnowledgeChunks, removeKnowledgeChunksByFileId, addConnectedApp, removeConnectedApp } = useStore()
     const [url, setUrl] = useState('')
     const [isConnected, setIsConnected] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
@@ -26,69 +26,64 @@ export function SupabaseDashboard() {
     const [newTableName, setNewTableName] = useState('')
     const [showAddTable, setShowAddTable] = useState(false)
 
+    const supabaseSettings = settings.aiSettings.toolsEnabled?.supabase
+
     useEffect(() => {
-        const supabaseSettings = settings.aiSettings.toolsEnabled?.supabase
-        if (supabaseSettings?.supabaseUrl && supabaseSettings?.supabaseKey) {
-            setUrl(supabaseSettings.supabaseUrl)
-            if (supabaseSettings.enabled) {
-                checkConnection(supabaseSettings.supabaseUrl, supabaseSettings.supabaseKey)
-            }
-        }
-    }, [])
-
-    const checkConnection = async (testUrl: string, testKey: string) => {
-        setIsLoading(true)
-        try {
-            const client = createClient(testUrl, testKey)
-            const { error } = await client.from('_test_connection_').select('*').limit(1)
-
-            if (error && (error.message.includes('JWT') || error.code === 'PGRST301')) {
-                throw new Error('Invalid Credentials')
-            }
-
-            setIsConnected(true)
-            if (!connectedApps.includes('Supabase')) {
-                addConnectedApp('Supabase')
-            }
-            fetchTables()
-        } catch (err) {
-            console.error('Connection check failed:', err)
+        // Not configured or disabled
+        if (!supabaseSettings?.supabaseUrl || !supabaseSettings?.supabaseKey || !supabaseSettings.enabled) {
             setIsConnected(false)
-            if (connectedApps.includes('Supabase')) {
-                removeConnectedApp('Supabase')
-            }
-        } finally {
-            setIsLoading(false)
+            setUrl(supabaseSettings?.supabaseUrl || '')
+            removeConnectedApp('Supabase')
+            return
         }
-    }
 
-    const fetchTables = async () => {
-        try {
-            const result = await ToolService.executeTool('supabase', { operation: 'get_tables' })
-            if (result.isError) throw new Error(result.result)
+        setUrl(supabaseSettings.supabaseUrl)
 
-            const tableNames: string[] = JSON.parse(result.result)
+        const connectAndLoad = async () => {
+            setIsLoading(true)
+            try {
+                const client = createClient(supabaseSettings.supabaseUrl, supabaseSettings.supabaseKey)
+                const { error } = await client.from('_test_connection_').select('*').limit(1)
 
-            // Allow failing on individual counts without failing entire load
-            const loadedTables: TableInfo[] = []
-
-            for (const name of tableNames) {
-                try {
-                    const countResult = await ToolService.executeTool('supabase', { operation: 'count_rows', table: name })
-                    loadedTables.push({
-                        name,
-                        rowCount: countResult.isError ? '?' : countResult.result
-                    })
-                } catch (e) {
-                    loadedTables.push({ name, rowCount: '?' })
+                if (error && (error.message.includes('JWT') || error.code === 'PGRST301')) {
+                    throw new Error('Invalid Credentials')
                 }
-            }
 
-            setTables(loadedTables)
-        } catch (err) {
-            console.error('Failed to fetch tables:', err)
+                setIsConnected(true)
+                addConnectedApp('Supabase')
+
+                const result = await ToolService.executeTool('supabase', { operation: 'get_tables' })
+                if (result.isError) throw new Error(result.result)
+
+                const tableNames: string[] = JSON.parse(result.result)
+
+                // Allow failing on individual counts without failing entire load
+                const loadedTables: TableInfo[] = []
+
+                for (const name of tableNames) {
+                    try {
+                        const countResult = await ToolService.executeTool('supabase', { operation: 'count_rows', table: name })
+                        loadedTables.push({
+                            name,
+                            rowCount: countResult.isError ? '?' : countResult.result
+                        })
+                    } catch (_error) {
+                        loadedTables.push({ name, rowCount: '?' })
+                    }
+                }
+
+                setTables(loadedTables)
+            } catch (err) {
+                console.error('Connection check failed:', err)
+                setIsConnected(false)
+                removeConnectedApp('Supabase')
+            } finally {
+                setIsLoading(false)
+            }
         }
-    }
+
+        void connectAndLoad()
+    }, [addConnectedApp, removeConnectedApp, supabaseSettings])
 
     const handlePreview = async (tableName: string) => {
         if (activeTable === tableName && previewData) {
@@ -210,7 +205,7 @@ export function SupabaseDashboard() {
                         Configure your project in Settings &gt; Integration Keys to enable database access.
                     </p>
                     <Button
-                        onClick={() => updateSettings({ ...settings, /* trigger config modal? or just direct to settings */ })} // Ideally we redirect to settings, but for now just a message
+                        onClick={() => setCurrentView('settings')}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
                         Go to Settings

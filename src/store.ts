@@ -115,6 +115,10 @@ export interface Settings {
   voiceSettings: VoiceSettings
 }
 
+export type SettingsUpdate = Partial<Omit<Settings, 'aiSettings'>> & {
+  aiSettings?: Partial<AISettings>
+}
+
 // Agent Automation Types
 export interface AgentBlueprint {
   id: string
@@ -208,7 +212,7 @@ interface AppState {
 
   // Settings
   settings: Settings
-  updateSettings: (updates: Partial<Settings>) => void
+  updateSettings: (updates: SettingsUpdate) => void
 
   // Sidebar
   sidebarCollapsed: boolean
@@ -329,14 +333,18 @@ const storage: StateStorage = {
   removeItem: async (name: string): Promise<void> => {
     try {
       localStorage.removeItem(name)
-    } catch (e) { }
+    } catch (e) {
+      console.error('LocalStorage remove failed', e)
+    }
 
     try {
       if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
         await tauriStore.delete(name)
         await tauriStore.save()
       }
-    } catch (e) { }
+    } catch (e) {
+      console.error('Tauri store remove failed', e)
+    }
   }
 }
 
@@ -469,23 +477,24 @@ export const useStore = create<AppState>()(
         set((state) => {
           // Deep merge aiSettings if they are part of the update
           if (updates.aiSettings) {
+            const { aiSettings, ...restUpdates } = updates
             return {
               settings: {
                 ...state.settings,
-                ...updates,
+                ...restUpdates,
                 aiSettings: {
                   ...state.settings.aiSettings,
-                  ...updates.aiSettings,
+                  ...aiSettings,
                   // Ensure toolsEnabled is also merged deeply if provided
-                  toolsEnabled: updates.aiSettings.toolsEnabled
-                    ? { ...state.settings.aiSettings.toolsEnabled, ...updates.aiSettings.toolsEnabled }
+                  toolsEnabled: aiSettings.toolsEnabled
+                    ? { ...state.settings.aiSettings.toolsEnabled, ...aiSettings.toolsEnabled }
                     : state.settings.aiSettings.toolsEnabled,
-                }
-              }
+                } as AISettings
+              } as Settings
             };
           }
           return {
-            settings: { ...state.settings, ...updates },
+            settings: { ...state.settings, ...updates } as Settings,
           };
         }),
 
@@ -498,7 +507,9 @@ export const useStore = create<AppState>()(
       connectedApps: [],
       addConnectedApp: (app) =>
         set((state) => ({
-          connectedApps: [...state.connectedApps, app],
+          connectedApps: state.connectedApps.includes(app)
+            ? state.connectedApps
+            : [...state.connectedApps, app],
         })),
       removeConnectedApp: (app) =>
         set((state) => ({
@@ -509,6 +520,10 @@ export const useStore = create<AppState>()(
       knowledgeBase: [],
       knowledgeBaseLoaded: false,
       loadKnowledgeBase: async () => {
+        if (typeof indexedDB === 'undefined') {
+          set({ knowledgeBaseLoaded: true })
+          return
+        }
         try {
           const chunks = await knowledgeBaseDB.getChunks()
           set({ knowledgeBase: chunks, knowledgeBaseLoaded: true })

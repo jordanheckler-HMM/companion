@@ -1,47 +1,25 @@
 import { useState, useEffect } from 'react'
 import { useStore, AgentBlueprint } from '@/store'
 import {
-    X, Save, Bot, Sparkles, Wrench, Cpu, Brain, Zap, Search,
-    FileText, Terminal, Layout, MessageSquare, Shield, Globe,
-    LineChart, Code, Check, Cloud, Monitor
+    X,
+    Save,
+    Bot,
+    Sparkles,
+    Wrench,
+    Check,
+    Cloud,
+    Monitor,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AIService } from '@/services/aiService'
 import { ToolSelector } from './ToolSelector'
 import { cn } from '@/lib/utils'
+import { COLOR_OPTIONS, ICON_OPTIONS } from './agentOptions'
 
 interface AgentEditorProps {
     agentId?: string // If provided, editing existing agent
     onClose: () => void
 }
-
-export const ICON_OPTIONS = [
-    { id: 'Bot', icon: Bot },
-    { id: 'Sparkles', icon: Sparkles },
-    { id: 'Cpu', icon: Cpu },
-    { id: 'Brain', icon: Brain },
-    { id: 'Zap', icon: Zap },
-    { id: 'Search', icon: Search },
-    { id: 'FileText', icon: FileText },
-    { id: 'Terminal', icon: Terminal },
-    { id: 'Layout', icon: Layout },
-    { id: 'MessageSquare', icon: MessageSquare },
-    { id: 'Shield', icon: Shield },
-    { id: 'Globe', icon: Globe },
-    { id: 'LineChart', icon: LineChart },
-    { id: 'Code', icon: Code }
-]
-
-export const COLOR_OPTIONS = [
-    { id: 'blue', value: '#3b82f6' },
-    { id: 'purple', value: '#a855f7' },
-    { id: 'pink', value: '#ec4899' },
-    { id: 'red', value: '#ef4444' },
-    { id: 'orange', value: '#f97316' },
-    { id: 'yellow', value: '#eab308' },
-    { id: 'green', value: '#22c55e' },
-    { id: 'cyan', value: '#06b6d4' }
-]
 
 export function AgentEditor({ agentId, onClose }: AgentEditorProps) {
     const { agents, addAgent, updateAgent, settings, updateSettings } = useStore()

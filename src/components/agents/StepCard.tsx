@@ -1,7 +1,7 @@
 import { PipelineStep, useStore } from '@/store'
 import { Bot, Clock, Trash2, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ICON_OPTIONS } from './AgentEditor'
+import { ICON_OPTIONS } from './agentOptions'
 import { SaveToVaultConfig } from './SaveToVaultConfig'
 import { IntegrationActionConfig } from './IntegrationActionConfig'
 

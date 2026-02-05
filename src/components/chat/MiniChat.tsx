@@ -233,7 +233,7 @@ export const MiniChat = () => {
                                             return <div className={`bg-black/30 p-2 rounded my-2 overflow-x-auto ${className || ''}`}>{children}</div>
                                         },
                                         code: ({ ...props }) => {
-                                            const { node, ...rest } = props;
+                                            const { node: _node, ...rest } = props
                                             return <code className="bg-black/20 px-1 rounded text-white/90" {...rest} />
                                         },
                                         p: ({ children }) => <p className="text-white/90 mb-2 last:mb-0">{children}</p>

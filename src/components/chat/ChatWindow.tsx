@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { readTextFile, readFile } from '@tauri-apps/plugin-fs'
 import { Send, PaperclipIcon as Paperclip, X, FileEdit, Database, Cloud, Home, Square, ChevronDown, Sparkles, Mic, MicOff, Brain, Copy, Check, Volume2 } from 'lucide-react'
@@ -229,6 +229,7 @@ export function ChatWindow() {
 
   const userHasScrolledUpRef = useRef(false)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const lastSpokenMessageIdRef = useRef<string | null>(null)
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior })
@@ -292,7 +293,7 @@ export function ChatWindow() {
 
     window.addEventListener('paste', handlePaste)
     return () => window.removeEventListener('paste', handlePaste)
-  }, [])
+  }, [addMessage])
 
 
   useEffect(() => {
@@ -683,7 +684,7 @@ export function ChatWindow() {
   }
 
   // Voice functions
-  const handleVoiceToggle = async () => {
+  const handleVoiceToggle = useCallback(async () => {
     if (!settings.voiceSettings.enabled) {
       addMessage({
         role: 'assistant',
@@ -735,7 +736,7 @@ export function ChatWindow() {
         })
       }
     }
-  }
+  }, [addMessage, isRecording, settings.voiceSettings.enabled])
 
   // Speak AI responses if voice mode AND speakResponses are enabled
   useEffect(() => {
@@ -743,6 +744,9 @@ export function ChatWindow() {
 
     const lastMessage = messages[messages.length - 1]
     if (lastMessage && lastMessage.role === 'assistant' && lastMessage.status === 'done' && lastMessage.content) {
+      if (lastSpokenMessageIdRef.current === lastMessage.id) return
+      lastSpokenMessageIdRef.current = lastMessage.id
+
       // Speak the response
       const speakResponse = async () => {
         try {
@@ -763,7 +767,14 @@ export function ChatWindow() {
       }
       speakResponse()
     }
-  }, [messages, settings.voiceSettings.enabled, settings.voiceSettings.speakResponses])
+  }, [
+    messages,
+    settings.voiceSettings.enabled,
+    settings.voiceSettings.speakResponses,
+    settings.voiceSettings.autoListen,
+    isRecording,
+    handleVoiceToggle,
+  ])
 
   const filteredModels = availableModels.filter(m => {
     if (settings.aiSettings.intelligenceMode === 'local') return m.type === 'local'

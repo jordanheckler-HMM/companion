@@ -28,7 +28,11 @@ export class CodeExecutionTool {
             const output = await command.execute()
 
             // Clean up
-            try { await remove(filePath) } catch (e) { }
+            try {
+                await remove(filePath)
+            } catch (_error) {
+                // Ignore cleanup errors
+            }
 
             let result = ''
             if (output.stdout) result += `STDOUT:\n${output.stdout}\n`

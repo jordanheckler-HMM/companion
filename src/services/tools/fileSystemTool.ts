@@ -6,19 +6,25 @@ export class FileSystemTool {
         try {
             switch (operation) {
                 case 'read':
-                    const data = await readTextFile(path)
-                    return data
+                    {
+                        const data = await readTextFile(path)
+                        return data
+                    }
                 case 'write':
-                    const confirmed = await confirm(
-                        `The AI wants to write to the file at:\n${path}\n\nDo you want to allow this?`,
-                        { title: 'Confirm File Write', kind: 'warning' }
-                    )
-                    if (!confirmed) return "User denied file write permission."
-                    await writeTextFile(path, content || '')
-                    return `Successfully wrote to ${path}`
+                    {
+                        const confirmed = await confirm(
+                            `The AI wants to write to the file at:\n${path}\n\nDo you want to allow this?`,
+                            { title: 'Confirm File Write', kind: 'warning' }
+                        )
+                        if (!confirmed) return "User denied file write permission."
+                        await writeTextFile(path, content || '')
+                        return `Successfully wrote to ${path}`
+                    }
                 case 'list':
-                    const entries = await readDir(path)
-                    return entries.map(e => `${e.isDirectory ? '[DIR]' : '[FILE]'} ${e.name}`).join('\n')
+                    {
+                        const entries = await readDir(path)
+                        return entries.map(e => `${e.isDirectory ? '[DIR]' : '[FILE]'} ${e.name}`).join('\n')
+                    }
                 default:
                     return `Unsupported operation: ${operation}`
             }

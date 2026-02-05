@@ -51,29 +51,31 @@ export function CodeEditor({
 
     const editorRef = useRef<any>(null)
     const containerRef = useRef<HTMLDivElement>(null)
+    const handleSaveRef = useRef<() => void>(() => { })
+    const handleExitRef = useRef<() => void>(() => { })
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Ctrl+S or Cmd+S to save
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault()
-                handleSave()
+                handleSaveRef.current()
             }
             // Esc to exit
             if (e.key === 'Escape') {
                 e.preventDefault()
-                handleExit()
+                handleExitRef.current()
             }
             // Ctrl+K to toggle AI panel
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault()
-                setAiPanelOpen(!aiPanelOpen)
+                setAiPanelOpen(prev => !prev)
             }
         }
 
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [content, hasUnsavedChanges, aiPanelOpen, filePath, editableFileName])
+    }, [])
 
     // Resizing logic
     useEffect(() => {
@@ -173,6 +175,9 @@ export function CodeEditor({
         }
         onExit()
     }
+
+    handleSaveRef.current = () => { void handleSave() }
+    handleExitRef.current = handleExit
 
     // AI Functions
     const askAI = async (prompt: string) => {

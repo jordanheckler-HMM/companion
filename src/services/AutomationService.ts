@@ -161,12 +161,14 @@ class AutomationService {
                 break
 
             case 'condition':
-                const shouldContinue = this.executeCondition(step, context)
-                if (!shouldContinue) {
-                    context.logs.push(`[CONDITION] Condition failed, skipping remaining steps`)
-                    throw new Error('CONDITION_FAILED') // Will be caught specially
+                {
+                    const shouldContinue = this.executeCondition(step, context)
+                    if (!shouldContinue) {
+                        context.logs.push(`[CONDITION] Condition failed, skipping remaining steps`)
+                        throw new Error('CONDITION_FAILED') // Will be caught specially
+                    }
+                    break
                 }
-                break
 
             default:
                 throw new Error(`Unknown step type: ${(step as any).type}`)

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useStore } from '@/store'
 import { TeamService, Team, TeamThread, TeamMessage, TeamMember } from '@/services/TeamService'
 import { AIService } from '@/services/aiService'
@@ -79,29 +79,59 @@ export function TeamWorkspace() {
     const [memberRemoveConfirmId, setMemberRemoveConfirmId] = useState<string | null>(null)
     const [vaultSourceDeleteConfirm, setVaultSourceDeleteConfirm] = useState<string | null>(null)
 
+    const activeTeamId = activeTeam?.id
+    const activeThreadId = activeThread?.id
+
+    const loadTeams = useCallback(async () => {
+        const data = await TeamService.getMyTeams()
+        setTeams(data)
+        setActiveTeam(prev => (data.length > 0 ? prev ?? data[0] : null))
+    }, [])
+
+    const loadThreads = useCallback(async () => {
+        if (!activeTeamId) return
+        const data = await TeamService.getThreads(activeTeamId)
+        setThreads(data)
+        setActiveThread(prev => {
+            if (data.length === 0) return null
+            if (prev && data.some(t => t.id === prev.id)) return prev
+            return data[0]
+        })
+    }, [activeTeamId])
+
+    const loadMembers = useCallback(async () => {
+        if (!activeTeamId) return
+        const data = await TeamService.getTeamMembers(activeTeamId)
+        setMembers(data)
+    }, [activeTeamId])
+
+    const loadVaultSources = useCallback(async () => {
+        if (!activeTeamId) return
+        const sources = await TeamService.getTeamVaultSources(activeTeamId)
+        setVaultSources(sources)
+    }, [activeTeamId])
+
     // Load teams and current user on mount
     useEffect(() => {
-        loadTeams()
+        void loadTeams()
         TeamService.getCurrentUserId().then(setCurrentUserId)
-    }, [])
+    }, [loadTeams])
 
     // Load threads when team changes
     useEffect(() => {
-        if (activeTeam) {
-            loadThreads()
-            loadMembers()
-            loadVaultSources()
-        }
-    }, [activeTeam?.id])
+        void loadThreads()
+        void loadMembers()
+        void loadVaultSources()
+    }, [loadMembers, loadThreads, loadVaultSources])
 
     // Load messages and subscribe when thread changes
     useEffect(() => {
-        if (activeThread) {
+        if (activeThreadId) {
             // Clear old messages first, then load new ones
             setMessages([])
 
             const fetchAndSubscribe = async () => {
-                const data = await TeamService.getMessages(activeThread.id)
+                const data = await TeamService.getMessages(activeThreadId)
                 setMessages(data)
 
                 // Now subscribe for future messages
@@ -109,7 +139,7 @@ export function TeamWorkspace() {
                     realtimeChannelRef.current.unsubscribe()
                 }
 
-                const channel = TeamService.subscribeToThread(activeThread.id, (newMessage) => {
+                const channel = TeamService.subscribeToThread(activeThreadId, (newMessage) => {
                     setMessages(prev => {
                         // Avoid duplicates
                         if (prev.some(m => m.id === newMessage.id)) return prev
@@ -128,41 +158,12 @@ export function TeamWorkspace() {
                 realtimeChannelRef.current.unsubscribe()
             }
         }
-    }, [activeThread?.id])
+    }, [activeThreadId])
 
     // Scroll to bottom on new messages
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages, streamingContent])
-
-    const loadTeams = async () => {
-        const data = await TeamService.getMyTeams()
-        setTeams(data)
-        if (data.length > 0 && !activeTeam) {
-            setActiveTeam(data[0])
-        }
-    }
-
-    const loadThreads = async () => {
-        if (!activeTeam) return
-        const data = await TeamService.getThreads(activeTeam.id)
-        setThreads(data)
-        if (data.length > 0 && !activeThread) {
-            setActiveThread(data[0])
-        }
-    }
-
-    const loadMembers = async () => {
-        if (!activeTeam) return
-        const data = await TeamService.getTeamMembers(activeTeam.id)
-        setMembers(data)
-    }
-
-    const loadVaultSources = async () => {
-        if (!activeTeam) return
-        const sources = await TeamService.getTeamVaultSources(activeTeam.id)
-        setVaultSources(sources)
-    }
 
     const createTeam = async () => {
         if (!newTeamName.trim()) return
@@ -613,7 +614,7 @@ export function TeamWorkspace() {
                 // But generally preserving content for preview is good.
 
                 // If it's a text file, we might want the text content for RAG/Context
-                let processedContent = content;
+                const processedContent = content
                 if (!file.type.startsWith('image/')) {
                     // Re-read as text if needed, but here we read as text initially?
                     // The original code used readAsText.

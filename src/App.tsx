@@ -17,13 +17,14 @@ import { useStore } from '@/store'
 import { RAGService } from '@/services/ragService'
 import { ModelRegistry } from '@/services/ModelRegistry'
 import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import mammoth from 'mammoth'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ToastManager } from '@/components/ToastManager'
 import { automationService } from '@/services/AutomationService'
 
 // Initialize PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker
 
 import { MiniChat } from '@/components/chat/MiniChat'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -127,6 +128,14 @@ function App() {
     }
   }, [hasHydrated])
 
+  // Initialize Supabase (once)
+  useEffect(() => {
+    const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env
+    if (VITE_SUPABASE_URL && VITE_SUPABASE_ANON_KEY) {
+      SupabaseService.initialize(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+    }
+  }, [])
+
   // AI & Model Initialization
   useEffect(() => {
     const initializeModels = async () => {
@@ -155,7 +164,7 @@ function App() {
           const defaultLocal = settings.aiSettings.ollamaModel && localModels.some(m => m.id === settings.aiSettings.ollamaModel)
             ? settings.aiSettings.ollamaModel
             : localModels[0].id
-          updateSettings({ aiSettings: { ...settings.aiSettings, preferredModelId: defaultLocal } })
+          updateSettings({ aiSettings: { preferredModelId: defaultLocal } })
         } else if (settings.aiSettings.intelligenceMode === 'cloud') {
           const cloudModels = allModels.filter(m => m.type === 'cloud')
           if (cloudModels.length > 0) {
@@ -163,7 +172,7 @@ function App() {
             const defaultCloud = settings.aiSettings.cloudModel && cloudModels.some(m => m.id === settings.aiSettings.cloudModel)
               ? settings.aiSettings.cloudModel
               : cloudModels[0].id
-            updateSettings({ aiSettings: { ...settings.aiSettings, preferredModelId: defaultCloud } })
+            updateSettings({ aiSettings: { preferredModelId: defaultCloud } })
           }
         }
       }
@@ -172,14 +181,16 @@ function App() {
     }
 
     initializeModels()
-    initializeModels()
-
-    // Initialize Supabase
-    const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env
-    if (VITE_SUPABASE_URL && VITE_SUPABASE_ANON_KEY) {
-      SupabaseService.initialize(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
-    }
-  }, [settings.aiSettings.ollamaUrl])
+  }, [
+    settings.aiSettings.ollamaUrl,
+    settings.aiSettings.intelligenceMode,
+    settings.aiSettings.preferredModelId,
+    settings.aiSettings.ollamaModel,
+    settings.aiSettings.cloudModel,
+    setAvailableModels,
+    setOllamaInstallStatus,
+    updateSettings,
+  ])
 
 
   const handleFileAction = (fileId: string, action: string) => {

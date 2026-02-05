@@ -28,7 +28,7 @@ export function SettingsPanel() {
             setAvailableModels(models)
         }
         fetchModels()
-    }, [settings.aiSettings.intelligenceMode, settings.aiSettings.ollamaUrl, settings.aiSettings.cloudProvider])
+    }, [settings.aiSettings])
 
     // Load available system voices
     useEffect(() => {
