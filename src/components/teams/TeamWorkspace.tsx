@@ -722,11 +722,11 @@ export function TeamWorkspace() {
     // If no teams, show create team UI
     if (teams.length === 0) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center p-8">
-                <div className="glass rounded-2xl p-8 max-w-md w-full text-center">
-                    <Users className="h-16 w-16 mx-auto mb-4 text-[rgb(var(--accent-rgb))]" />
-                    <h2 className="text-2xl font-bold mb-2">Create Your First Team</h2>
-                    <p className="text-foreground/60 mb-6">
+            <div className="flex-1 flex flex-col items-center justify-center p-6">
+                <div className="glass rounded-xl p-6 max-w-md w-full text-center">
+                    <Users className="h-12 w-12 mx-auto mb-3 text-[rgb(var(--accent-rgb))]" />
+                    <h2 className="text-lg font-semibold mb-1.5">Create Your First Team</h2>
+                    <p className="text-foreground/60 text-sm mb-4">
                         Teams let you collaborate with others using shared AI agents and knowledge.
                     </p>
                     <div className="flex gap-2">
@@ -734,11 +734,11 @@ export function TeamWorkspace() {
                             value={newTeamName}
                             onChange={(e) => setNewTeamName(e.target.value)}
                             placeholder="Team name..."
-                            className="flex-1"
+                            className="flex-1 text-sm"
                             onKeyDown={(e) => e.key === 'Enter' && createTeam()}
                         />
-                        <Button onClick={createTeam} disabled={!newTeamName.trim()}>
-                            <Plus className="h-4 w-4 mr-2" />
+                        <Button size="sm" onClick={createTeam} disabled={!newTeamName.trim()}>
+                            <Plus className="h-3.5 w-3.5 mr-1.5" />
                             Create
                         </Button>
                     </div>
@@ -775,20 +775,20 @@ export function TeamWorkspace() {
             }}
         >
             {/* Team Sidebar */}
-            <div className="w-64 glass-sidebar flex flex-col border-r border-white/10">
+            <div className="w-56 min-w-[12rem] max-w-[20rem] resize-x overflow-hidden glass-sidebar flex flex-col border-r border-white/10">
                 {/* Team Selector with Dropdown */}
-                <div className="p-3 border-b border-white/10">
+                <div className="p-2 border-b border-white/10">
                     <button
                         onClick={() => setShowTeamMenu(!showTeamMenu)}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg glass hover:bg-white/5 transition-colors"
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md glass hover:bg-white/5 transition-colors"
                     >
                         <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-[rgb(var(--accent-rgb))]" />
+                            <Users className="h-3.5 w-3.5 text-[rgb(var(--accent-rgb))]" />
                             {isRenaming ? (
                                 <Input
                                     value={editTeamName}
                                     onChange={(e) => setEditTeamName(e.target.value)}
-                                    className="h-6 text-sm px-1 w-32"
+                                    className="h-7 text-xs px-2 w-28"
                                     autoFocus
                                     onClick={(e) => e.stopPropagation()}
                                     onKeyDown={(e) => {
@@ -797,7 +797,7 @@ export function TeamWorkspace() {
                                     }}
                                 />
                             ) : (
-                                <span className="font-semibold truncate">{activeTeam?.name}</span>
+                                <span className="text-sm font-semibold truncate">{activeTeam?.name}</span>
                             )}
                         </div>
                         <div className="flex items-center gap-1">
@@ -810,7 +810,7 @@ export function TeamWorkspace() {
                                 </button>
                             ) : (
                                 <ChevronDown className={cn(
-                                    "h-4 w-4 text-foreground/40 transition-transform",
+                                    "h-3.5 w-3.5 text-foreground/40 transition-transform",
                                     showTeamMenu && "rotate-180"
                                 )} />
                             )}
@@ -828,7 +828,7 @@ export function TeamWorkspace() {
                         />
 
                         {/* Dropdown */}
-                        <div className="absolute left-3 right-3 top-[4.5rem] bg-[#1a1a1a] rounded-lg border border-white/20 shadow-2xl z-50 overflow-hidden">
+                        <div className="absolute left-3 right-3 top-[3.5rem] bg-[#1a1a1a] rounded-md border border-white/15 shadow-none z-50 overflow-hidden">
                             {/* Team List */}
                             <div className="max-h-48 overflow-y-auto">
                                 {teams.map(team => (
@@ -841,16 +841,16 @@ export function TeamWorkspace() {
                                             setShowTeamMenu(false)
                                         }}
                                         className={cn(
-                                            "w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors",
+                                            "w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors",
                                             activeTeam?.id === team.id
                                                 ? "bg-[rgb(var(--accent-rgb))]/20 text-[rgb(var(--accent-rgb))]"
                                                 : "hover:bg-white/5"
                                         )}
                                     >
-                                        <Users className="h-3.5 w-3.5" />
+                                        <Users className="h-3 w-3" />
                                         <span className="truncate flex-1">{team.name}</span>
                                         {team.owner_id === currentUserId && (
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">Owner</span>
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">Owner</span>
                                         )}
                                     </button>
                                 ))}
@@ -866,19 +866,19 @@ export function TeamWorkspace() {
                                                 setIsRenaming(true)
                                                 setShowTeamMenu(false)
                                             }}
-                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-white/5 rounded text-foreground/70"
+                                            className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-white/5 rounded text-foreground/70"
                                         >
-                                            <Pencil className="h-3.5 w-3.5" />
+                                            <Pencil className="h-3 w-3" />
                                             Rename Team
                                         </button>
                                         <button
                                             onClick={() => handleDeleteTeam()}
                                             className={cn(
-                                                "w-full flex items-center gap-2 px-3 py-2 text-sm rounded transition-colors",
+                                                "w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded transition-colors",
                                                 teamDeleteConfirm ? "bg-red-500 text-white" : "hover:bg-red-500/10 text-red-400"
                                             )}
                                         >
-                                            <Trash2 className="h-3.5 w-3.5" />
+                                            <Trash2 className="h-3 w-3" />
                                             {teamDeleteConfirm ? "CONFIRM DELETE TEAM" : "Delete Team"}
                                         </button>
                                     </>
@@ -886,11 +886,11 @@ export function TeamWorkspace() {
                                     <button
                                         onClick={() => handleLeaveTeam()}
                                         className={cn(
-                                            "w-full flex items-center gap-2 px-3 py-2 text-sm rounded transition-colors",
+                                            "w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded transition-colors",
                                             teamLeaveConfirm ? "bg-red-500 text-white" : "hover:bg-red-500/10 text-red-400"
                                         )}
                                     >
-                                        <LogOut className="h-3.5 w-3.5" />
+                                        <LogOut className="h-3 w-3" />
                                         {teamLeaveConfirm ? "CONFIRM LEAVE TEAM" : "Leave Team"}
                                     </button>
                                 )}
@@ -899,9 +899,9 @@ export function TeamWorkspace() {
                                         setShowTeamMenu(false)
                                         setNewTeamName('')
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-white/5 rounded text-foreground/70"
+                                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-white/5 rounded text-foreground/70"
                                 >
-                                    <Plus className="h-3.5 w-3.5" />
+                                    <Plus className="h-3 w-3" />
                                     Create New Team
                                 </button>
                             </div>
@@ -910,24 +910,24 @@ export function TeamWorkspace() {
                 )}
 
                 {/* Threads List */}
-                <div className="flex-1 overflow-y-auto p-2">
-                    <div className="flex items-center justify-between px-2 py-1 mb-2">
-                        <span className="text-xs font-bold text-foreground/40 uppercase tracking-wider">Threads</span>
+                <div className="flex-1 overflow-y-auto p-1.5">
+                    <div className="flex items-center justify-between px-2 py-0.5 mb-1.5">
+                        <span className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider">Threads</span>
                         <button
                             onClick={() => setShowCreateThread(!showCreateThread)}
                             className="p-1 rounded hover:bg-white/10 transition-colors"
                         >
-                            <Plus className="h-4 w-4 text-foreground/60" />
+                            <Plus className="h-3.5 w-3.5 text-foreground/60" />
                         </button>
                     </div>
 
                     {showCreateThread && (
-                        <div className="mb-2 px-2">
+                        <div className="mb-1.5 px-1.5">
                             <Input
                                 value={newThreadName}
                                 onChange={(e) => setNewThreadName(e.target.value)}
                                 placeholder="Thread name..."
-                                className="text-sm"
+                                className="text-xs h-8"
                                 onKeyDown={(e) => e.key === 'Enter' && createThread()}
                                 autoFocus
                             />
@@ -941,7 +941,7 @@ export function TeamWorkspace() {
                                     <Input
                                         value={editThreadName}
                                         onChange={(e) => setEditThreadName(e.target.value)}
-                                        className="h-8 text-sm"
+                                        className="h-8 text-xs"
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') handleUpdateThread(thread.id)
                                             if (e.key === 'Escape') setEditingThreadId(null)
@@ -955,14 +955,14 @@ export function TeamWorkspace() {
                                     <button
                                         onClick={() => setActiveThread(thread)}
                                         className={cn(
-                                            "flex-1 flex items-center gap-2 px-3 py-2 text-left transition-colors min-w-0 rounded-l-lg",
+                                            "flex-1 flex items-center gap-2 px-2.5 py-1.5 text-left transition-colors min-w-0 rounded-l-lg",
                                             activeThread?.id === thread.id
                                                 ? "bg-[rgb(var(--accent-rgb))]/20 text-[rgb(var(--accent-rgb))]"
                                                 : "text-foreground/70"
                                         )}
                                     >
-                                        <Hash className="h-4 w-4 shrink-0" />
-                                        <span className="truncate text-sm">{thread.name}</span>
+                                        <Hash className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="truncate text-xs">{thread.name}</span>
                                     </button>
 
                                     <div className={cn(
@@ -978,7 +978,7 @@ export function TeamWorkspace() {
                                                                 e.stopPropagation()
                                                                 handleDeleteThread(thread.id)
                                                             }}
-                                                            className="p-1 px-2 rounded-md bg-red-500 text-white text-[10px] font-bold hover:bg-red-600 transition-colors"
+                                                            className="p-1 px-1.5 rounded-md bg-red-500 text-white text-[9px] font-bold hover:bg-red-600 transition-colors"
                                                         >
                                                             CONFIRM
                                                         </button>
@@ -989,7 +989,7 @@ export function TeamWorkspace() {
                                                             }}
                                                             className="p-1 rounded-md hover:bg-white/10 text-foreground/40 hover:text-foreground/70"
                                                         >
-                                                            <X className="h-3.5 w-3.5" />
+                                                            <X className="h-3 w-3" />
                                                         </button>
                                                     </div>
                                                 ) : (
@@ -1000,20 +1000,20 @@ export function TeamWorkspace() {
                                                                 setEditingThreadId(thread.id)
                                                                 setEditThreadName(thread.name)
                                                             }}
-                                                            className="p-1.5 rounded-md hover:bg-white/10 text-foreground/40 hover:text-foreground/70 transition-colors"
+                                                            className="p-1 rounded-md hover:bg-white/10 text-foreground/40 hover:text-foreground/70 transition-colors"
                                                             title="Rename thread"
                                                         >
-                                                            <Pencil className="h-3.5 w-3.5" />
+                                                            <Pencil className="h-3 w-3" />
                                                         </button>
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation()
                                                                 handleDeleteThread(thread.id)
                                                             }}
-                                                            className="p-1.5 rounded-md hover:bg-red-500/10 text-foreground/40 hover:text-red-400 transition-colors"
+                                                            className="p-1 rounded-md hover:bg-red-500/10 text-foreground/40 hover:text-red-400 transition-colors"
                                                             title="Delete thread"
                                                         >
-                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                            <Trash2 className="h-3 w-3" />
                                                         </button>
                                                     </>
                                                 )}
@@ -1026,11 +1026,11 @@ export function TeamWorkspace() {
                     ))}
                 </div>
 
-                <div className="p-2 border-t border-white/10">
-                    <div className="flex items-center justify-between px-2 py-1 mb-2">
-                        <span className="text-xs font-bold text-foreground/40 uppercase tracking-wider">Team Vault</span>
+                <div className="p-1.5 border-t border-white/10">
+                    <div className="flex items-center justify-between px-2 py-0.5 mb-1.5">
+                        <span className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider">Team Vault</span>
                         <div className="flex items-center gap-2">
-                            <span className="text-xs text-foreground/40">{vaultSources.length}</span>
+                            <span className="text-[10px] text-foreground/40">{vaultSources.length}</span>
                             <button
                                 onClick={() => setShowVaultManager(true)}
                                 className="p-1 rounded hover:bg-white/10 text-foreground/40 hover:text-foreground/80 transition-colors"
@@ -1040,7 +1040,7 @@ export function TeamWorkspace() {
                         </div>
                     </div>
                     {vaultSources.slice(0, 3).map((source, i) => (
-                        <div key={i} className="flex items-center gap-2 px-3 py-1 text-xs text-foreground/60">
+                        <div key={i} className="flex items-center gap-2 px-2.5 py-0.5 text-[10px] text-foreground/60">
                             <Database className="h-3 w-3" />
                             <span className="truncate">{source}</span>
                         </div>
@@ -1048,24 +1048,24 @@ export function TeamWorkspace() {
                 </div>
 
                 {/* Members Section with Management */}
-                <div className="p-2 border-t border-white/10">
-                    <div className="flex items-center justify-between px-2 py-1 mb-2">
-                        <span className="text-xs font-bold text-foreground/40 uppercase tracking-wider">Members ({members.length})</span>
+                <div className="p-1.5 border-t border-white/10">
+                    <div className="flex items-center justify-between px-2 py-0.5 mb-1.5">
+                        <span className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider">Members ({members.length})</span>
                         <button
                             onClick={() => setShowInvite(!showInvite)}
                             className="p-1 rounded hover:bg-white/10 transition-colors"
                         >
-                            <UserPlus className="h-4 w-4 text-foreground/60" />
+                            <UserPlus className="h-3.5 w-3.5 text-foreground/60" />
                         </button>
                     </div>
 
                     {showInvite && (
-                        <div className="mb-2 px-2 flex gap-1">
+                        <div className="mb-1.5 px-1.5 flex gap-1">
                             <Input
                                 value={inviteEmail}
                                 onChange={(e) => setInviteEmail(e.target.value)}
                                 placeholder="Email..."
-                                className="text-sm flex-1"
+                                className="text-xs h-8 flex-1"
                                 onKeyDown={(e) => e.key === 'Enter' && inviteMember()}
                             />
                             <Button size="sm" onClick={inviteMember}>
@@ -1074,22 +1074,22 @@ export function TeamWorkspace() {
                         </div>
                     )}
 
-                    <div className="space-y-1 px-2">
+                    <div className="space-y-1 px-1.5">
                         {members.map(member => (
                             <div
                                 key={member.user_id}
-                                className="flex items-center gap-2 py-1 group"
+                                className="flex items-center gap-1.5 py-0.5 group"
                             >
-                                <Avatar className="h-6 w-6 border border-white/10">
-                                    <AvatarFallback className="text-xs bg-[rgb(var(--accent-rgb))]/20">
+                                <Avatar className="h-5 w-5 border border-white/10">
+                                    <AvatarFallback className="text-[10px] bg-[rgb(var(--accent-rgb))]/20">
                                         {member.profile?.username?.[0]?.toUpperCase() || '?'}
                                     </AvatarFallback>
                                 </Avatar>
-                                <span className="text-xs text-foreground/70 truncate flex-1">
+                                <span className="text-[10px] text-foreground/70 truncate flex-1">
                                     {member.profile?.username || 'Unknown'}
                                 </span>
                                 {member.role === 'admin' && (
-                                    <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400">Admin</span>
+                                    <span className="text-[8px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400">Admin</span>
                                 )}
                                 {isOwner && member.user_id !== currentUserId && (
                                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1108,12 +1108,12 @@ export function TeamWorkspace() {
                                             className={cn(
                                                 "p-1 rounded transition-colors",
                                                 memberRemoveConfirmId === member.user_id
-                                                    ? "bg-red-500 text-white px-2"
+                                                    ? "bg-red-500 text-white px-1.5"
                                                     : "hover:bg-red-500/20 text-red-400"
                                             )}
                                             title="Remove from Team"
                                         >
-                                            {memberRemoveConfirmId === member.user_id ? <span className="text-[9px] font-bold">CONFIRM</span> : <X className="h-3 w-3" />}
+                                            {memberRemoveConfirmId === member.user_id ? <span className="text-[8px] font-bold">CONFIRM</span> : <X className="h-3 w-3" />}
                                         </button>
                                     </div>
                                 )}
@@ -1126,15 +1126,15 @@ export function TeamWorkspace() {
             {/* Chat Area */}
             <div className="flex-1 flex flex-col">
                 {/* Thread Header */}
-                <div className="h-14 glass border-b border-white/10 flex items-center justify-between px-4 relative z-50">
+                <div className="h-12 glass border-b border-white/10 flex items-center justify-between px-3 relative z-50">
                     <div className="flex items-center gap-2">
-                        <Hash className="h-5 w-5 text-[rgb(var(--accent-rgb))]" />
-                        <span className="font-semibold">{activeThread?.name || 'Select a thread'}</span>
+                        <Hash className="h-4 w-4 text-[rgb(var(--accent-rgb))]" />
+                        <span className="text-sm font-semibold">{activeThread?.name || 'Select a thread'}</span>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                         {/* Intelligence Mode Tabs */}
-                        <div className="flex glass rounded-lg p-0.5 border border-white/5">
+                        <div className="flex glass rounded-md p-0.5 border border-white/5">
                             {(['local', 'cloud'] as const).map((mode) => (
                                 <button
                                     key={mode}
@@ -1142,7 +1142,7 @@ export function TeamWorkspace() {
                                     className={cn(
                                         "px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider transition-all duration-200",
                                         settings.aiSettings.intelligenceMode === mode
-                                            ? "bg-[rgb(var(--accent-rgb))] text-white shadow-lg"
+                                            ? "bg-[rgb(var(--accent-rgb))] text-white"
                                             : "text-foreground/40 hover:text-foreground/60 hover:bg-white/5"
                                     )}
                                 >
@@ -1162,30 +1162,30 @@ export function TeamWorkspace() {
 
                             return (
                                 <div className="relative group/model">
-                                    <div className="flex items-center gap-1.5 glass-hover px-2.5 py-1 rounded-lg cursor-pointer border border-white/5 hover:border-white/20 transition-all">
+                                    <div className="flex items-center gap-1.5 glass-hover px-2 py-0.5 rounded-md cursor-pointer border border-white/5 hover:border-white/20 transition-all">
                                         <div
                                             className={cn(
                                                 "w-1.5 h-1.5 rounded-full",
                                                 activeModel?.type === 'local' ? "bg-green-400" : "bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
                                             )}
                                         />
-                                        <span className="text-[11px] font-semibold whitespace-nowrap">
+                                        <span className="text-[10px] font-semibold whitespace-nowrap">
                                             {activeModel?.displayName || 'Select Model'}
                                         </span>
                                         <ChevronDown className="h-3 w-3 opacity-30" />
                                     </div>
 
                                     {/* Dropdown */}
-                                    <div className="absolute top-full right-0 mt-2 w-64 bg-[#0c0c0c] border border-white/20 rounded-2xl shadow-2xl opacity-0 invisible group-hover/model:opacity-100 group-hover/model:visible transition-all duration-200 z-[100] p-3 backdrop-blur-3xl">
+                                    <div className="absolute top-full right-0 mt-1.5 w-56 bg-[#0c0c0c] border border-white/15 rounded-xl shadow-none opacity-0 invisible group-hover/model:opacity-100 group-hover/model:visible transition-all duration-200 z-[100] p-2.5 backdrop-blur-3xl">
                                         <div className="px-1 mb-2 flex items-center justify-between">
-                                            <span className="text-[10px] uppercase font-black tracking-widest text-[rgb(var(--accent-rgb))]">Models</span>
+                                            <span className="text-[9px] uppercase font-semibold tracking-wider text-[rgb(var(--accent-rgb))]">Models</span>
                                             <button
                                                 onClick={async () => {
                                                     const aiService = new AIService(settings.aiSettings)
                                                     await aiService.getModels()
                                                     setAvailableModels(ModelRegistry.getInstance().getAllModels())
                                                 }}
-                                                className="p-1 px-1.5 rounded-lg bg-white/5 hover:bg-[rgb(var(--accent-rgb))]/20 transition-all"
+                                                className="p-1 rounded-md bg-white/5 hover:bg-[rgb(var(--accent-rgb))]/20 transition-all"
                                             >
                                                 <Sparkles className="h-3 w-3" />
                                             </button>
@@ -1197,14 +1197,14 @@ export function TeamWorkspace() {
                                                     key={m.id}
                                                     onClick={() => updateSettings({ aiSettings: { ...settings.aiSettings, preferredModelId: m.id } })}
                                                     className={cn(
-                                                        "flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all duration-200 border",
+                                                        "flex items-center justify-between p-2 rounded-md cursor-pointer transition-all duration-200 border",
                                                         settings.aiSettings.preferredModelId === m.id
                                                             ? "bg-[rgb(var(--accent-rgb))]/10 border-[rgb(var(--accent-rgb))]/40"
                                                             : "bg-transparent border-transparent hover:bg-white/5"
                                                     )}
                                                 >
                                                     <div className="flex items-center gap-3">
-                                                        <div className="flex items-center justify-center w-5 h-5">
+                                                        <div className="flex items-center justify-center w-4 h-4">
                                                             {m.type === 'local' ? (
                                                                 <Home className="h-3 w-3 text-green-400/70" />
                                                             ) : (
@@ -1212,8 +1212,8 @@ export function TeamWorkspace() {
                                                             )}
                                                         </div>
                                                         <div className="flex flex-col">
-                                                            <span className="text-xs font-bold text-white/90 leading-tight">{m.displayName}</span>
-                                                            <span className="text-[9px] text-white/30 uppercase tracking-tighter font-medium">{m.provider}</span>
+                                                            <span className="text-xs font-semibold text-white/90 leading-tight">{m.displayName}</span>
+                                                            <span className="text-[8px] text-white/30 uppercase tracking-tighter font-medium">{m.provider}</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1224,38 +1224,38 @@ export function TeamWorkspace() {
                             )
                         })()}
 
-                        <div className="h-6 w-px bg-white/10 mx-1" />
+                        <div className="h-5 w-px bg-white/10 mx-1" />
 
                         <button
                             onClick={() => setUseTeamVault(!useTeamVault)}
                             className={cn(
-                                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-nowrap",
+                                "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all text-nowrap",
                                 useTeamVault
                                     ? "bg-[rgb(var(--accent-rgb))]/20 text-[rgb(var(--accent-rgb))] border border-[rgb(var(--accent-rgb))]/30"
                                     : "glass text-foreground/60"
                             )}
                         >
-                            <Brain className="h-3.5 w-3.5" />
+                            <Brain className="h-3 w-3" />
                             Team Vault
                         </button>
 
                         <button
                             onClick={() => setAskAI(!askAI)}
                             className={cn(
-                                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-nowrap",
+                                "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all text-nowrap",
                                 askAI
                                     ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
                                     : "glass text-foreground/60"
                             )}
                         >
-                            <Sparkles className="h-3.5 w-3.5" />
+                            <Sparkles className="h-3 w-3" />
                             Ask AI
                         </button>
                     </div>
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-3 space-y-3">
                     {messages.map(msg => (
                         <MessageBubble
                             key={msg.id}
@@ -1267,12 +1267,12 @@ export function TeamWorkspace() {
 
                     {/* Streaming message */}
                     {isStreaming && streamingContent && (
-                        <div className="flex gap-3">
-                            <Avatar className="h-8 w-8 border border-white/10 bg-black">
+                        <div className="flex gap-2">
+                            <Avatar className="h-7 w-7 border border-white/10 bg-black">
                                 <img src={logo} alt="AI" className="h-full w-full object-cover scale-110 mix-blend-screen" />
                                 <div className="absolute inset-0 bg-accent mix-blend-color opacity-70 pointer-events-none" />
                             </Avatar>
-                            <div className="glass-message px-4 py-3 rounded-2xl max-w-[85%]">
+                            <div className="glass-message px-3 py-2 rounded-xl max-w-[85%]">
                                 <div className="prose prose-sm max-w-none prose-invert">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                         {streamingContent}
@@ -1286,26 +1286,26 @@ export function TeamWorkspace() {
                 </div>
 
                 {/* Input Area */}
-                <div className="p-4 glass-input">
+                <div className="p-3 glass-input">
                     {/* Pending Files */}
                     {pendingFiles.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-3">
+                        <div className="flex flex-wrap gap-1.5 mb-2">
                             {pendingFiles.map((file, i) => (
-                                <div key={i} className="glass px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm">
-                                    <Paperclip className="h-3.5 w-3.5" />
+                                <div key={i} className="glass px-2 py-1 rounded-md flex items-center gap-1.5 text-xs">
+                                    <Paperclip className="h-3 w-3" />
                                     <span className="truncate max-w-[150px]">{file.name}</span>
                                     <button onClick={() => removePendingFile(i)} className="hover:text-red-400">
-                                        <X className="h-3.5 w-3.5" />
+                                        <X className="h-3 w-3" />
                                     </button>
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         {/* File Upload */}
-                        <label className="p-2 rounded-lg glass hover:bg-white/10 cursor-pointer transition-colors">
-                            <Paperclip className="h-5 w-5 text-foreground/60" />
+                        <label className="p-1.5 rounded-md glass hover:bg-white/10 cursor-pointer transition-colors">
+                            <Paperclip className="h-4 w-4 text-foreground/60" />
                             <input type="file" className="hidden" multiple accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif" onChange={handleFileUpload} />
                         </label>
 
@@ -1313,11 +1313,11 @@ export function TeamWorkspace() {
                         <button
                             onClick={handleVoiceToggle}
                             className={cn(
-                                "p-2 rounded-lg transition-colors",
+                                "p-1.5 rounded-md transition-colors",
                                 isRecording ? "bg-red-500/20 text-red-400" : "glass hover:bg-white/10 text-foreground/60"
                             )}
                         >
-                            {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                            {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                         </button>
 
                         {/* Input */}
@@ -1332,12 +1332,12 @@ export function TeamWorkspace() {
 
                         {/* Send / Stop */}
                         {isStreaming ? (
-                            <Button variant="destructive" disabled>
-                                <Square className="h-4 w-4" />
+                            <Button size="sm" variant="destructive" disabled>
+                                <Square className="h-3.5 w-3.5" />
                             </Button>
                         ) : (
-                            <Button onClick={handleSend} disabled={isLoading || (!input.trim() && pendingFiles.length === 0)}>
-                                <Send className="h-4 w-4" />
+                            <Button size="sm" onClick={handleSend} disabled={isLoading || (!input.trim() && pendingFiles.length === 0)}>
+                                <Send className="h-3.5 w-3.5" />
                             </Button>
                         )}
                     </div>
@@ -1349,24 +1349,24 @@ export function TeamWorkspace() {
                             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                             onClick={() => setShowVaultManager(false)}
                         />
-                        <div className="relative w-full max-w-2xl bg-[#1a1a1a] border border-white/20 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-                            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                        <div className="relative w-full max-w-2xl bg-[#1a1a1a] border border-white/20 rounded-xl shadow-none overflow-hidden flex flex-col max-h-[80vh]">
+                            <div className="p-3 border-b border-white/10 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <Database className="h-5 w-5 text-[rgb(var(--accent-rgb))]" />
-                                    <h2 className="text-lg font-semibold">Team Vault Management</h2>
+                                    <Database className="h-4 w-4 text-[rgb(var(--accent-rgb))]" />
+                                    <h2 className="text-base font-semibold">Team Vault Management</h2>
                                 </div>
                                 <button
                                     onClick={() => setShowVaultManager(false)}
-                                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                                    className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
                                 >
-                                    <X className="h-5 w-5" />
+                                    <X className="h-4 w-4" />
                                 </button>
                             </div>
 
-                            <div className="p-6 flex-1 overflow-y-auto">
-                                <div className="mb-6">
-                                    <h3 className="text-sm font-semibold mb-2 text-foreground/60 uppercase tracking-wider">Add Knowledge</h3>
-                                    <div className="border-2 border-dashed border-white/10 rounded-xl p-8 flex flex-col items-center justify-center gap-4 hover:border-white/20 transition-colors relative">
+                            <div className="p-4 flex-1 overflow-y-auto">
+                                <div className="mb-5">
+                                    <h3 className="text-[11px] font-semibold mb-2 text-foreground/60 uppercase tracking-wider">Add Knowledge</h3>
+                                    <div className="border border-dashed border-white/10 rounded-lg p-6 flex flex-col items-center justify-center gap-3 hover:border-white/20 transition-colors relative">
                                         <input
                                             type="file"
                                             className="absolute inset-0 opacity-0 cursor-pointer"
@@ -1374,43 +1374,43 @@ export function TeamWorkspace() {
                                             disabled={isIndexing}
                                         />
                                         {isIndexing ? (
-                                            <Loader2 className="h-8 w-8 text-[rgb(var(--accent-rgb))] animate-spin" />
+                                            <Loader2 className="h-6 w-6 text-[rgb(var(--accent-rgb))] animate-spin" />
                                         ) : (
-                                            <Upload className="h-8 w-8 text-foreground/20" />
+                                            <Upload className="h-6 w-6 text-foreground/20" />
                                         )}
                                         <div className="text-center">
-                                            <p className="font-medium text-foreground/80">Click or drag to upload knowledge</p>
-                                            <p className="text-xs text-foreground/40 mt-1">Files will be indexed and shared with the entire team</p>
+                                            <p className="text-sm font-medium text-foreground/80">Click or drag to upload knowledge</p>
+                                            <p className="text-[11px] text-foreground/40 mt-1">Files will be indexed and shared with the entire team</p>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div>
-                                    <h3 className="text-sm font-semibold mb-2 text-foreground/60 uppercase tracking-wider">Indexed Sources ({vaultSources.length})</h3>
+                                    <h3 className="text-[11px] font-semibold mb-2 text-foreground/60 uppercase tracking-wider">Indexed Sources ({vaultSources.length})</h3>
                                     <div className="space-y-2">
                                         {vaultSources.map((source, i) => (
-                                            <div key={i} className="flex items-center justify-between p-3 glass rounded-lg group">
+                                            <div key={i} className="flex items-center justify-between p-2.5 glass rounded-md group">
                                                 <div className="flex items-center gap-3">
-                                                    <FileText className="h-4 w-4 text-foreground/40" />
-                                                    <span className="text-sm font-medium">{source}</span>
+                                                    <FileText className="h-3.5 w-3.5 text-foreground/40" />
+                                                    <span className="text-xs font-medium">{source}</span>
                                                 </div>
                                                 <button
                                                     onClick={() => handleDeleteVaultSource(source)}
                                                     className={cn(
-                                                        "p-2 rounded-lg transition-all flex items-center gap-1",
+                                                        "p-1.5 rounded-md transition-all flex items-center gap-1",
                                                         vaultSourceDeleteConfirm === source
                                                             ? "bg-red-500 text-white opacity-100"
                                                             : "text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/10"
                                                     )}
                                                 >
-                                                    {vaultSourceDeleteConfirm === source ? <span className="text-xs font-bold">CONFIRM</span> : <Trash className="h-4 w-4" />}
+                                                    {vaultSourceDeleteConfirm === source ? <span className="text-[11px] font-bold">CONFIRM</span> : <Trash className="h-3.5 w-3.5" />}
                                                 </button>
                                             </div>
                                         ))}
                                         {vaultSources.length === 0 && (
-                                            <div className="text-center py-8 text-foreground/40">
-                                                <Database className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                                                <p className="text-sm">No knowledge indexed yet</p>
+                                            <div className="text-center py-6 text-foreground/40">
+                                                <Database className="h-6 w-6 mx-auto mb-2 opacity-20" />
+                                                <p className="text-xs">No knowledge indexed yet</p>
                                             </div>
                                         )}
                                     </div>
@@ -1460,10 +1460,10 @@ function MessageBubble({ message, currentUserId, onToggleReaction }: Omit<Messag
 
     return (
         <div className={cn(
-            "flex gap-3 group/msg",
+            "flex gap-2 group/msg",
             isHuman ? "flex-row-reverse" : "flex-row"
         )}>
-            <Avatar className="h-8 w-8 flex-shrink-0 border border-white/10">
+            <Avatar className="h-7 w-7 flex-shrink-0 border border-white/10">
                 {!isHuman && (
                     <>
                         <img src={logo} alt="AI" className="h-full w-full object-cover scale-110 mix-blend-screen" />
@@ -1476,22 +1476,22 @@ function MessageBubble({ message, currentUserId, onToggleReaction }: Omit<Messag
             </Avatar>
 
             <div className={cn(
-                "px-4 py-3 rounded-2xl max-w-[85%] relative group/bubble",
+                "px-3 py-2 rounded-xl max-w-[85%] relative group/bubble",
                 isHuman ? "glass text-white" : "glass-sidebar border-white/5",
                 message.sender_type === 'model' && "border-primary-accent/30"
             )}>
-                <div className="flex items-center justify-between mb-1 gap-4">
-                    <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+                <div className="flex items-center justify-between mb-0.5 gap-4">
+                    <span className="text-[9px] font-bold uppercase tracking-wider opacity-40">
                         {message.sender_name}
                     </span>
-                    <span className="text-[10px] opacity-30">
+                    <span className="text-[9px] opacity-30">
                         {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                 </div>
 
                 {/* Reactions Display - Moved to TOP as requested */}
                 {hasReactions && (
-                    <div className="flex flex-wrap gap-1 mb-3">
+                    <div className="flex flex-wrap gap-1 mb-2">
                         {Object.entries(reactions).map(([emoji, users]) => {
                             const userList = users as string[]
                             if (userList.length === 0) return null
@@ -1502,7 +1502,7 @@ function MessageBubble({ message, currentUserId, onToggleReaction }: Omit<Messag
                                     key={emoji}
                                     onClick={() => onToggleReaction(message.id, emoji)}
                                     className={cn(
-                                        "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border transition-all",
+                                        "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] border transition-all",
                                         hasReacted
                                             ? "bg-accent/20 border-accent/40 text-accent"
                                             : "bg-white/5 border-white/10 text-foreground/60 hover:bg-white/10"
@@ -1522,36 +1522,36 @@ function MessageBubble({ message, currentUserId, onToggleReaction }: Omit<Messag
 
                     {/* Message Actions - Moved to BOTTOM as requested */}
                     <div className={cn(
-                        "flex gap-1 mt-3 mb-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity justify-end",
+                        "flex gap-1 mt-2 mb-0.5 opacity-0 group-hover/bubble:opacity-100 transition-opacity justify-end",
                         isHuman ? "flex-row-reverse" : "flex-row"
                     )}>
                         <button
                             onClick={handleCopy}
-                            className="p-1 px-2 rounded-md bg-black/40 hover:bg-black/60 border border-white/10 text-white/50 hover:text-white transition-all flex items-center gap-1.5"
+                            className="p-1 px-1.5 rounded-md bg-black/40 hover:bg-black/60 border border-white/10 text-white/50 hover:text-white transition-all flex items-center gap-1.5"
                             title="Copy message"
                         >
                             {isCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-                            <span className="text-[9px] font-bold uppercase tracking-wider">Copy</span>
+                            <span className="text-[8px] font-bold uppercase tracking-wider">Copy</span>
                         </button>
                         {!isHuman && (
                             <button
                                 onClick={handleSpeak}
                                 className={cn(
-                                    "p-1 px-2 rounded-md border border-white/10 transition-all flex items-center gap-1.5",
+                                    "p-1 px-1.5 rounded-md border border-white/10 transition-all flex items-center gap-1.5",
                                     isSpeaking
-                                        ? "bg-primary-accent text-white shadow-lg shadow-primary-accent/40"
+                                        ? "bg-primary-accent text-white"
                                         : "bg-black/40 hover:bg-black/60 text-white/50 hover:text-white"
                                 )}
                                 title={isSpeaking ? "Stop speaking" : "Speak message"}
                             >
                                 <Volume2 className={cn("h-3 w-3", isSpeaking && "animate-pulse")} />
-                                <span className="text-[9px] font-bold uppercase tracking-wider">{isSpeaking ? 'Stop' : 'Speak'}</span>
+                                <span className="text-[8px] font-bold uppercase tracking-wider">{isSpeaking ? 'Stop' : 'Speak'}</span>
                             </button>
                         )}
                         <button
                             onClick={() => onToggleReaction(message.id, '👍')}
                             className={cn(
-                                "p-1 px-2 rounded-md border border-white/10 transition-all flex items-center gap-1.5",
+                                "p-1 px-1.5 rounded-md border border-white/10 transition-all flex items-center gap-1.5",
                                 (reactions['👍'] || []).includes(currentUserId || '')
                                     ? "bg-accent/20 text-accent border-accent/40"
                                     : "bg-black/40 hover:bg-black/60 text-white/50 hover:text-white"
@@ -1559,7 +1559,7 @@ function MessageBubble({ message, currentUserId, onToggleReaction }: Omit<Messag
                             title="React with Like"
                         >
                             <Smile className="h-3 w-3" />
-                            <span className="text-[9px] font-bold uppercase tracking-wider">Like</span>
+                            <span className="text-[8px] font-bold uppercase tracking-wider">Like</span>
                         </button>
                     </div>
 
@@ -1571,7 +1571,7 @@ function MessageBubble({ message, currentUserId, onToggleReaction }: Omit<Messag
                                     key={i}
                                     src={url}
                                     alt="Shared asset"
-                                    className="max-w-full max-h-[300px] rounded-lg border border-white/10 object-contain hover:scale-105 transition-transform cursor-pointer"
+                                    className="max-w-full max-h-[300px] rounded-md border border-white/10 object-contain hover:scale-105 transition-transform cursor-pointer"
                                     onClick={() => window.open(url, '_blank')}
                                 />
                             ))}
@@ -1579,7 +1579,7 @@ function MessageBubble({ message, currentUserId, onToggleReaction }: Omit<Messag
                     )}
                 </div>
 
-                <span className="text-[10px] text-foreground/40 font-medium block mt-2">
+                <span className="text-[9px] text-foreground/40 font-medium block mt-1.5">
                     {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
             </div>
