@@ -4,6 +4,14 @@ export class WebSearchTool {
     static async search(query: string): Promise<string> {
         try {
             console.log(`WebSearchTool: Searching for "${query}"`)
+            const searxUrl = import.meta.env.VITE_SEARXNG_URL as string | undefined
+            if (searxUrl) {
+                const searxResults = await this.searchWithSearx(searxUrl, query)
+                if (searxResults.length > 0) {
+                    return searxResults.map((r, i) => `Result ${i + 1}:\nTitle: ${r.title}\nURL: ${r.url}\nSnippet: ${r.snippet}`).join('\n\n')
+                }
+            }
+
             const encodedQuery = encodeURIComponent(query)
             const endpoints = [
                 `https://html.duckduckgo.com/html/?q=${encodedQuery}`,
@@ -60,6 +68,35 @@ export class WebSearchTool {
         return normalized.includes('did not match any documents') ||
             normalized.includes('no results') ||
             normalized.includes('no results found')
+    }
+
+    private static async searchWithSearx(baseUrl: string, query: string): Promise<{ title: string, url: string, snippet: string }[]> {
+        try {
+            const trimmedBase = baseUrl.replace(/\/+$/, '')
+            const url = `${trimmedBase}/search?q=${encodeURIComponent(query)}&format=json`
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Companion/1.0',
+                },
+                connectTimeout: 10000,
+            })
+
+            if (!response.ok) {
+                return []
+            }
+
+            const data = await response.json()
+            const results = Array.isArray(data?.results) ? data.results : []
+            return results.slice(0, 5).map((item: any) => ({
+                title: item?.title || 'No Title',
+                url: item?.url || '',
+                snippet: item?.content || item?.snippet || 'No preview available.'
+            })).filter((r: { url: string }) => !!r.url)
+        } catch (_error) {
+            return []
+        }
     }
 
     private static parseResults(html: string): { title: string, url: string, snippet: string }[] {
