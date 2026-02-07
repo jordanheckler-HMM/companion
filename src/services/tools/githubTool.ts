@@ -25,8 +25,6 @@ interface PendingGitHubAction {
 export class GitHubTool {
     private static readonly CONFIRM_TTL_MS = 10 * 60 * 1000
     private static pendingActions = new Map<string, PendingGitHubAction>()
-    private static readonly READ_OPERATIONS = new Set(['repos', 'issues', 'prs', 'get_file'])
-    private static readonly WRITE_OPERATIONS = new Set(['create_issue'])
 
     /**
      * Execute a GitHub operation
@@ -60,7 +58,7 @@ export class GitHubTool {
     /**
      * List user repositories
      */
-    private static async listRepos(apiKey: string, args: any): Promise<string> {
+    private static async listRepos(apiKey: string | null, args: any): Promise<string> {
         const username = args.username || args.user
         const limit = args.limit || 10
 
@@ -107,7 +105,7 @@ export class GitHubTool {
     /**
      * List issues for a repository
      */
-    private static async listIssues(apiKey: string, args: any): Promise<string> {
+    private static async listIssues(apiKey: string | null, args: any): Promise<string> {
         const repo = args.repo || args.repository
         if (!repo) {
             return 'Error: repo parameter required (format: "owner/repo")'
@@ -151,7 +149,7 @@ export class GitHubTool {
     /**
      * List pull requests for a repository
      */
-    private static async listPullRequests(apiKey: string, args: any): Promise<string> {
+    private static async listPullRequests(apiKey: string | null, args: any): Promise<string> {
         const repo = args.repo || args.repository
         if (!repo) {
             return 'Error: repo parameter required (format: "owner/repo")'
@@ -192,7 +190,7 @@ export class GitHubTool {
     /**
      * Create a new issue
      */
-    private static async createIssue(apiKey: string, args: any): Promise<string> {
+    private static async createIssue(apiKey: string | null, args: any): Promise<string> {
         const repo = args.repo || args.repository
         if (!repo) {
             return 'Error: repo parameter required (format: "owner/repo")'
@@ -281,7 +279,7 @@ export class GitHubTool {
     /**
      * Get file content from a repository
      */
-    private static async getFile(apiKey: string, args: any): Promise<string> {
+    private static async getFile(apiKey: string | null, args: any): Promise<string> {
         const repo = args.repo || args.repository
         const path = args.path || 'README.md'
 
