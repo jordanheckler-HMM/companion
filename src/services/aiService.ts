@@ -1,5 +1,5 @@
 import { AISettings } from '../store'
-import { ToolService } from './toolService'
+import { ToolService, ToolDefinition } from './toolService'
 import { ModelRegistry, ModelDefinition } from './ModelRegistry'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import { ErrorLogger, ErrorSeverity } from '../utils/errorLogger'
@@ -247,7 +247,7 @@ The editor will open with this content pre-loaded. The user can then edit, save,
     }
 
     private shouldUseNativeToolCalling(model: ModelDefinition): boolean {
-        return model.provider === 'openai' || model.provider === 'anthropic'
+        return model.provider === 'openai' || model.provider === 'anthropic' || model.provider === 'google'
     }
 
     private extractNativeToolCalls(toolCalls: any[]): { name: string; arguments: any }[] {
@@ -302,6 +302,20 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         }
 
         return parsedCalls
+    }
+
+    private extractGeminiToolCalls(parts: any[]): { name: string; arguments: any }[] {
+        if (!Array.isArray(parts) || parts.length === 0) return []
+
+        const rawCalls = parts
+            .map((part: any) => part?.functionCall || part?.function_call)
+            .filter((fn: any) => fn && typeof fn === 'object')
+            .map((fn: any) => ({
+                name: fn.name,
+                arguments: fn.args ?? fn.arguments ?? fn.parameters ?? {}
+            }))
+
+        return this.extractNativeToolCalls(rawCalls)
     }
 
     /**
@@ -428,7 +442,7 @@ The editor will open with this content pre-loaded. The user can then edit, save,
     /**
      * Convert internal ToolDefinitions to OpenAI-compatible Tool objects
      */
-    private getOpenAITools(): any[] {
+    private getEnabledTools(): ToolDefinition[] {
         const allTools = ToolService.getToolDefinitions()
         const toolSettings = this.settings.toolsEnabled || {
             web_search: true,
@@ -440,11 +454,15 @@ The editor will open with this content pre-loaded. The user can then edit, save,
             github: true,
         }
 
-        const enabledTools = allTools.filter(t => {
+        return allTools.filter(t => {
             const setting = toolSettings[t.name as keyof typeof toolSettings]
             const statusAllowed = t.status === 'active' || t.status === 'limited'
             return setting !== false && statusAllowed
         })
+    }
+
+    private getOpenAITools(): any[] {
+        const enabledTools = this.getEnabledTools()
 
         if (enabledTools.length === 0) return []
 
@@ -591,27 +609,70 @@ The editor will open with this content pre-loaded. The user can then edit, save,
     }
 
     private getAnthropicTools(): any[] {
-        const allTools = ToolService.getToolDefinitions()
-        const toolSettings = this.settings.toolsEnabled || {
-            web_search: true,
-            url_reader: true,
-            file_system: true,
-            execute_code: true,
-            google_calendar: true,
-            notion: true,
-            github: true,
-        }
-
-        return allTools
-            .filter(t => {
-                const statusAllowed = t.status === 'active' || t.status === 'limited'
-                return toolSettings[t.name as keyof typeof toolSettings] !== false && statusAllowed
-            })
+        return this.getEnabledTools()
             .map(t => ({
                 name: t.name,
                 description: t.description,
                 input_schema: t.parameters
             }))
+    }
+
+    private convertJsonSchemaToGoogleSchema(schema: any): any {
+        const typeMap: Record<string, string> = {
+            object: 'OBJECT',
+            string: 'STRING',
+            number: 'NUMBER',
+            integer: 'INTEGER',
+            boolean: 'BOOLEAN',
+            array: 'ARRAY',
+        }
+
+        if (!schema || typeof schema !== 'object') {
+            return { type: 'OBJECT', properties: {} }
+        }
+
+        const rawType = typeof schema.type === 'string' ? schema.type.toLowerCase() : 'object'
+        const convertedType = typeMap[rawType] || 'STRING'
+        const converted: any = { type: convertedType }
+
+        if (typeof schema.description === 'string') {
+            converted.description = schema.description
+        }
+
+        if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+            converted.enum = schema.enum.filter((value: unknown) =>
+                ['string', 'number', 'boolean'].includes(typeof value)
+            )
+        }
+
+        if (convertedType === 'OBJECT') {
+            const properties = schema.properties && typeof schema.properties === 'object' ? schema.properties : {}
+            converted.properties = Object.fromEntries(
+                Object.entries(properties).map(([key, value]) => [key, this.convertJsonSchemaToGoogleSchema(value)])
+            )
+            if (Array.isArray(schema.required) && schema.required.length > 0) {
+                converted.required = schema.required.filter((key: unknown) => typeof key === 'string')
+            }
+        } else if (convertedType === 'ARRAY') {
+            converted.items = this.convertJsonSchemaToGoogleSchema(schema.items)
+        }
+
+        return converted
+    }
+
+    private getGoogleTools(): any[] {
+        const enabledTools = this.getEnabledTools()
+        if (enabledTools.length === 0) return []
+
+        return [
+            {
+                function_declarations: enabledTools.map((tool) => ({
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: this.convertJsonSchemaToGoogleSchema(tool.parameters)
+                }))
+            }
+        ]
     }
 
     /**
@@ -1480,6 +1541,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
      */
     private async sendToGoogle(messages: ChatMessage[], model: ModelDefinition): Promise<ChatResponse> {
         const apiKey = this.getApiKey('google')
+        const tools = this.getGoogleTools()
         const contents = messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role === 'assistant' ? 'model' : 'user',
             parts: [
@@ -1502,6 +1564,10 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         if (systemMsg) {
             body.system_instruction = { parts: [{ text: systemMsg.content }] }
         }
+        if (tools.length > 0) {
+            body.tools = tools
+            body.tool_config = { function_calling_config: { mode: 'AUTO' } }
+        }
 
         const response = await tauriFetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -1515,9 +1581,17 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         }
 
         const data = await response.json()
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        const parts = data.candidates?.[0]?.content?.parts || []
+        const text = parts
+            .filter((part: any) => typeof part?.text === 'string')
+            .map((part: any) => part.text)
+            .join('\n')
+        const toolCalls = this.extractGeminiToolCalls(parts)
 
-        return { message: text }
+        return {
+            message: text,
+            ...(toolCalls.length > 0 ? { toolCalls } : {})
+        }
     }
 
     /**
@@ -1529,6 +1603,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         onChunk: (chunk: string) => void
     ): Promise<StreamProviderResult> {
         const apiKey = this.getApiKey('google')
+        const tools = this.getGoogleTools()
         const contents = messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role === 'assistant' ? 'model' : 'user',
             parts: [
@@ -1550,6 +1625,10 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         if (systemMsg) {
             body.system_instruction = { parts: [{ text: systemMsg.content }] }
         }
+        if (tools.length > 0) {
+            body.tools = tools
+            body.tool_config = { function_calling_config: { mode: 'AUTO' } }
+        }
 
         const response = await tauriFetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:streamGenerateContent?alt=sse&key=${apiKey}`, {
             method: 'POST',
@@ -1567,6 +1646,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
 
         const decoder = new TextDecoder()
         let buffer = ''
+        const toolCalls: { name: string; arguments: any }[] = []
 
         while (true) {
             const { done, value } = await reader.read()
@@ -1580,8 +1660,16 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                 if (line.startsWith('data: ')) {
                     try {
                         const data = JSON.parse(line.slice(6))
-                        const chunk = data.candidates?.[0]?.content?.parts?.[0]?.text
-                        if (chunk) onChunk(chunk)
+                        const parts = data.candidates?.[0]?.content?.parts || []
+                        for (const part of parts) {
+                            if (typeof part?.text === 'string' && part.text) {
+                                onChunk(part.text)
+                            }
+                        }
+                        const streamedToolCalls = this.extractGeminiToolCalls(parts)
+                        if (streamedToolCalls.length > 0) {
+                            toolCalls.push(...streamedToolCalls)
+                        }
                     } catch (e) {
                         // Ignore parsing errors for partial chunks
                     }
@@ -1589,6 +1677,16 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
             }
         }
 
-        return {}
+        const dedupedToolCalls: { name: string; arguments: any }[] = []
+        const seen = new Set<string>()
+        for (const toolCall of toolCalls) {
+            const key = `${toolCall.name}:${JSON.stringify(toolCall.arguments)}`
+            if (!seen.has(key)) {
+                seen.add(key)
+                dedupedToolCalls.push(toolCall)
+            }
+        }
+
+        return dedupedToolCalls.length > 0 ? { toolCalls: dedupedToolCalls } : {}
     }
 }
