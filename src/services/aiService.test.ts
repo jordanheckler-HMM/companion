@@ -106,9 +106,150 @@ describe('AIService', () => {
     })
 
     it('should handle tool calls in response', async () => {
-        // This is a more complex test case that would require mocking the stream format for tools
-        // For now, we test the basic flow
-        expect(true).toBe(true)
+        const createWorkflowArgs = {
+            name: 'Release "Hotfix" Workflow',
+            trigger: {
+                type: 'manual',
+                config: { source: 'ops-console' }
+            },
+            pipeline: [
+                {
+                    type: 'agent_action',
+                    config: {
+                        agentId: 'agent_triage',
+                        prompt: 'Analyze "P0" incidents and return JSON with keys: "service", "impact".'
+                    }
+                },
+                {
+                    type: 'integration_action',
+                    config: {
+                        integration: 'supabase',
+                        args: {
+                            operation: 'query',
+                            query: 'select * from "incidents" where note = \'He said "ship it"\'',
+                            params: [
+                                { key: 'severity', values: ['critical', 'high'] },
+                                { key: 'tags', values: ['on-call', 'postmortem "required"'] }
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+
+        const supabaseArgs = {
+            operation: 'query',
+            query: 'select id, payload from "events" where payload->>\'source\' = \'api\'',
+            filters: [
+                {
+                    column: 'metadata',
+                    operator: 'contains',
+                    value: {
+                        labels: ['release', 'edge-case "quoted"'],
+                        notes: 'Line 1\nLine 2 with "quotes"'
+                    }
+                }
+            ],
+            options: {
+                orderBy: [{ column: 'created_at', direction: 'desc' }],
+                limit: 25
+            }
+        }
+
+        const createAgentArgs = {
+            name: 'Ops "Incident" Agent',
+            role: 'Summarize incidents and propose remediation.',
+            systemPrompt: 'Use strict JSON output. Preserve escaped quotes like \\"this\\".',
+            capabilities: ['analysis', 'triage'],
+            tools: [
+                {
+                    name: 'supabase',
+                    config: {
+                        allowedOps: ['query', 'count_rows'],
+                        defaults: {
+                            schema: 'public',
+                            tags: ['ops', 'incident "response"']
+                        }
+                    }
+                }
+            ]
+        }
+
+        const content = [
+            `[TOOL:create_workflow]${JSON.stringify(createWorkflowArgs)}[/TOOL]`,
+            `[TOOL:supabase]${JSON.stringify(supabaseArgs)}[/TOOL]`,
+            `[TOOL:create_agent]${JSON.stringify(createAgentArgs)}[/TOOL]`
+        ].join('\n')
+
+        const toolCalls = (aiService as any).extractToolCalls(content)
+
+        expect(toolCalls).toHaveLength(3)
+        expect(toolCalls[0]).toEqual({ name: 'create_workflow', arguments: createWorkflowArgs })
+        expect(toolCalls[1]).toEqual({ name: 'supabase', arguments: supabaseArgs })
+        expect(toolCalls[2]).toEqual({ name: 'create_agent', arguments: createAgentArgs })
+    })
+
+    it('should parse Gemini native function calls with deeply nested arguments and escaped quotes', async () => {
+        const parts = [
+            {
+                functionCall: {
+                    name: 'create_workflow',
+                    args: {
+                        name: 'Deploy "Canary" Workflow',
+                        trigger: { type: 'manual' },
+                        pipeline: [
+                            {
+                                type: 'condition',
+                                config: {
+                                    rules: [
+                                        { field: 'status', op: 'eq', value: 'ready' },
+                                        { field: 'note', op: 'contains', value: 'contains "quoted" phrase' }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                functionCall: {
+                    name: 'supabase',
+                    args: {
+                        operation: 'query',
+                        query: 'select * from "users" where profile->>\'nickname\' = \'JH "admin"\'',
+                        joins: [
+                            {
+                                table: 'teams',
+                                on: ['users.team_id', 'teams.id']
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                functionCall: {
+                    name: 'create_agent',
+                    args: {
+                        name: 'Reviewer',
+                        systemPrompt: 'Reject responses that omit escaped chars like \\\\".',
+                        onboarding: {
+                            checklist: ['Read docs', 'Run "smoke" checks'],
+                            metadata: { owner: 'platform' }
+                        }
+                    }
+                }
+            }
+        ]
+
+        const toolCalls = (aiService as any).extractGeminiToolCalls(parts)
+
+        expect(toolCalls).toHaveLength(3)
+        expect(toolCalls[0].name).toBe('create_workflow')
+        expect(toolCalls[0].arguments.pipeline[0].config.rules[1].value).toBe('contains "quoted" phrase')
+        expect(toolCalls[1].name).toBe('supabase')
+        expect(toolCalls[1].arguments.query).toContain('"users"')
+        expect(toolCalls[2].name).toBe('create_agent')
+        expect(toolCalls[2].arguments.systemPrompt).toContain('escaped chars')
     })
 
     it('should handle errors gracefully', async () => {
