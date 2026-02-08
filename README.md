@@ -1,115 +1,80 @@
-# Companion - Intelligent Desktop Assistant
+# Companion
 
-Companion is a modern, **local-first** AI desktop assistant built with **Tauri v2**, **React**, and **TypeScript**. It offers both local privacy (via Ollama) and cloud-grade capability (OpenAI, Anthropic, Google), customizable through a beautiful glassmorphism interface.
+Companion is a desktop AI assistant built with Tauri, React, and TypeScript.
 
-## 🚀 Key Features
+## Installation
 
-### 🧠 Dual Intelligence Modes
-- **Local Mode**: Runs entirely on your machine using **Ollama** (Llama 3, Mistral, etc.) for maximum privacy and offline capability.
-- **Cloud Mode**: Connects to top-tier models like **GPT-5.2**, **Claude 3.5 Sonnet**, or **Gemini 3.0** for complex reasoning and highest quality responses.
-- **Flexible Choice**: Easily toggle between modes based on your immediate needs for privacy vs. power.
+This section is for people installing the app from a prebuilt release (no coding setup required).
 
-### ⚡ Mini Chat (Quick Access)
-- A global, always-on-top floating panel for quick questions.
-- Access your AI assistance without leaving your current context.
+### 1. Download the app
 
-### 📚 Memory & RAG (Retrieval-Augmented Generation)
-- **Chat with Files**: Upload PDFs, Docs, and Text files. Companion indexes them into a local vector database.
-- **Semantic Search**: Ask questions about your documents, and Companion retrieves the exact context before answering.
+1. Open the Releases page: [GitHub Releases](https://github.com/jordanheckler-HMM/companion/releases)
+2. Open the latest release.
+3. Under **Assets**, download the file for your operating system.
 
-### 🛠️ Agentic Tools
-Companion isn't just a chatbot; it can **do** things:
-- **Web Search**: Real-time information via DuckDuckGo.
-- **File System**: Read/Write files directly on your computer.
-- **Code Execution**: Run Python and JavaScript snippets locally.
-- **URL Reader**: Scrape and summarize web pages.
+### 2. Install on macOS
 
-### 🔌 Integrations
-- **GitHub**: Manage issues, review PRs, and explore repositories.
-- **Notion**: Search, read, and create pages in your workspace.
-- **Google Calendar**: Check your schedule and book meetings.
-- *All integration keys are stored locally and encrypted.*
+Requirements: macOS 10.13 or newer.
 
-### 📝 AI-Powered Editor
-- Collaborative editor for long-form content and code.
-- AI co-authoring: "Refactor this code" or "Expand this section".
-- Syntax highlighting and multi-language support.
+1. Download the macOS installer asset (usually a `.dmg`).
+2. Open the downloaded file.
+3. Drag **Companion** into the **Applications** folder.
+4. Open **Applications** and launch **Companion**.
 
----
+If macOS says the app cannot be opened because it is from an unidentified developer:
 
-## 🛠️ Tech Stack
+1. In **Applications**, right-click **Companion** and click **Open**.
+2. Click **Open** again in the prompt.
+3. If needed, go to **System Settings -> Privacy & Security** and click **Open Anyway**.
 
-- **Core**: [Tauri v2](https://v2.tauri.app/) (Rust + Webview)
-- **Frontend**: React 18, TypeScript, Vite
-- **Styling**: TailwindCSS, Glassmorphism
-- **State Management**: Zustand (Dual persistence: localStorage + Tauri Store)
-- **AI / LLM**: Ollama (Local), OpenAI / Anthropic / Google (Cloud)
-- **Vector DB**: In-memory generic embeddings (Local-first RAG)
+### 3. Install on Windows
 
----
+1. Download the Windows installer asset (usually `.msi` or `.exe`).
+2. Double-click the installer.
+3. Follow the installation steps.
+4. Launch **Companion** from the Start menu.
 
-## 🏁 Getting Started
+If Windows SmartScreen warns you:
 
-### Prerequisites
-1.  **Node.js 18+**
-2.  **Rust** (for compiling the Tauri backend)
-3.  **[Ollama](https://ollama.com/)** (Required for local mode & embeddings)
+1. Click **More info**.
+2. Click **Run anyway**.
 
-### Installation
+## First Launch Setup
 
-1.  **Clone the repository**
-    ```bash
-    git clone https://github.com/jordanheckler-HMM/companion.git
-    cd companion
-    ```
+1. Open **Settings** in Companion.
+2. Choose an AI mode:
+   - **Local mode**: Uses Ollama running on your machine.
+   - **Cloud mode**: Uses OpenAI, Anthropic, or Google APIs.
+3. If using cloud mode, paste your API key in Settings.
+4. If using local mode, install Ollama from [ollama.com](https://ollama.com/) and keep it running.
 
-2.  **Install Frontend Dependencies**
-    ```bash
-    npm install
-    ```
+## Updating
 
-3.  **Start Development Server**
-    ```bash
-    npm run tauri dev
-    ```
-    *This will compile the Rust backend and launch the application window.*
+1. Download the newest release from [GitHub Releases](https://github.com/jordanheckler-HMM/companion/releases).
+2. Install it the same way as above.
+3. Your existing settings should remain in place.
 
----
+## Developer Setup
 
-## 📂 Project Structure
+If you want to run from source:
 
-```
-companion/
-├── src-tauri/           # Rust Backend
-│   ├── src/lib.rs       # App entry point, plugin setup, windows
-│   ├── capabilities/    # Application permissions (fs, http, shell)
-│   └── tauri.conf.json  # App configuration & window definitions
-│
-├── src/                 # React Frontend
-│   ├── components/
-│   │   ├── chat/        # ChatWindow, MiniChat, Editor
-│   │   ├── dashboard/   # Integration dashboards (GitHub/Notion/Cal)
-│   │   └── tools/       
-│   ├── services/
-│   │   ├── aiService.ts # Unified AI Provider (Ollama/Cloud)
-│   │   ├── ragService.ts# Vector search & file chunking
-│   │   └── toolService.ts # Tool execution registry
-│   └── store.ts         # Global state & persistence
-```
-
-## ⚠️ "Danger Zones" (For Contributors)
-
-- **`src/services/aiService.ts`**: Handles the critical regex parsing for tool calls. Modifying the loop logic here can break agentic capabilities.
-- **`src-tauri/tauri.conf.json`**: Controls the `panel` window. Changing window labels will break the Mini Chat toggle.
-
-## 🤝 Contributing
-
-We welcome contributions! Please verify your changes using the test suite:
+1. Install Node.js 18+.
+2. Install Rust.
+3. Clone this repository.
+4. Run:
 
 ```bash
-npm run test
+npm install
+npm run tauri dev
 ```
 
-## 📄 License
+## Tech Stack
 
-MIT License. Built for the future of desktop AI.
+- Tauri v2
+- React 18
+- TypeScript
+- Zustand
+
+## License
+
+MIT

@@ -291,6 +291,30 @@ import { LazyStore } from '@tauri-apps/plugin-store'
 const tauriStore = new LazyStore('settings.json')
 let saveTimeout: NodeJS.Timeout | null = null
 
+const redactSensitiveSettingsData = (value: string): string => {
+  return value
+    .replace(/"(openaiApiKey|anthropicApiKey|googleApiKey|googleCalendarApiKey|googleCalendarOAuthToken|notionApiKey|githubApiKey|apiKey|supabaseKey)"\s*:\s*"[^"]*"/gi, '"$1":"[REDACTED]"')
+    .replace(/(openaiApiKey|anthropicApiKey|googleApiKey|googleCalendarApiKey|googleCalendarOAuthToken|notionApiKey|githubApiKey|apiKey|supabaseKey)\s*[:=]\s*([^\s,}]+)/gi, '$1=[REDACTED]')
+    .replace(/\bsk-ant-[A-Za-z0-9_-]{10,}\b/g, '[REDACTED]')
+    .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, '[REDACTED]')
+    .replace(/\bAIza[0-9A-Za-z\-_]{20,}\b/g, '[REDACTED]')
+    .replace(/\bgh[pousr]_[A-Za-z0-9_]{20,}\b/g, '[REDACTED]')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, '[REDACTED]')
+    .replace(/([?&]key=)[^&\s]+/gi, '$1[REDACTED]')
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]')
+}
+
+const safeErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return redactSensitiveSettingsData(error.message || 'Unknown error')
+  if (typeof error === 'string') return redactSensitiveSettingsData(error)
+
+  try {
+    return redactSensitiveSettingsData(JSON.stringify(error))
+  } catch {
+    return 'Unknown error'
+  }
+}
+
 const storage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
     // 1. Try LocalStorage first (Fastest & Most Reliable for frequent updates)
@@ -304,7 +328,7 @@ const storage: StateStorage = {
         if (tauriValue) return tauriValue
       }
     } catch (e) {
-      console.warn('Tauri store get failed', e)
+      console.warn(`Tauri store get failed: ${safeErrorMessage(e)}`)
     }
 
     return null
@@ -314,7 +338,7 @@ const storage: StateStorage = {
     try {
       localStorage.setItem(name, value)
     } catch (e) {
-      console.error('LocalStorage write failed', e)
+      console.error(`LocalStorage write failed: ${safeErrorMessage(e)}`)
     }
 
     // 2. Debounce safe to Tauri store (Avoids file lock contention on keystrokes)
@@ -327,7 +351,7 @@ const storage: StateStorage = {
           await tauriStore.save()
         }
       } catch (e) {
-        console.error('Tauri store write failed', e)
+        console.error(`Tauri store write failed: ${safeErrorMessage(e)}`)
       }
     }, 1000)
   },
@@ -335,7 +359,7 @@ const storage: StateStorage = {
     try {
       localStorage.removeItem(name)
     } catch (e) {
-      console.error('LocalStorage remove failed', e)
+      console.error(`LocalStorage remove failed: ${safeErrorMessage(e)}`)
     }
 
     try {
@@ -344,7 +368,7 @@ const storage: StateStorage = {
         await tauriStore.save()
       }
     } catch (e) {
-      console.error('Tauri store remove failed', e)
+      console.error(`Tauri store remove failed: ${safeErrorMessage(e)}`)
     }
   }
 }
@@ -539,7 +563,7 @@ export const useStore = create<AppState>()(
           set({ knowledgeBase: chunks, knowledgeBaseLoaded: true })
           console.log(`[Store] Loaded ${chunks.length} knowledge chunks from IndexedDB`)
         } catch (error) {
-          console.error('[Store] Failed to load knowledge base:', error)
+          console.error(`[Store] Failed to load knowledge base: ${safeErrorMessage(error)}`)
           set({ knowledgeBaseLoaded: true }) // Mark as loaded even on error
         }
       },
@@ -551,7 +575,7 @@ export const useStore = create<AppState>()(
           }))
           console.log(`[Store] Added ${chunks.length} knowledge chunks to IndexedDB`)
         } catch (error) {
-          console.error('[Store] Failed to add knowledge chunks:', error)
+          console.error(`[Store] Failed to add knowledge chunks: ${safeErrorMessage(error)}`)
           set({ knowledgeBaseStorageWarning: 'Failed to save knowledge base.' })
         }
       },
@@ -563,7 +587,7 @@ export const useStore = create<AppState>()(
           }))
           console.log(`[Store] Removed chunks for file ${fileId}`)
         } catch (error) {
-          console.error('[Store] Failed to remove knowledge chunks:', error)
+          console.error(`[Store] Failed to remove knowledge chunks: ${safeErrorMessage(error)}`)
         }
       },
       clearKnowledgeBase: async () => {
@@ -572,7 +596,7 @@ export const useStore = create<AppState>()(
           set({ knowledgeBase: [], knowledgeBaseStorageWarning: null })
           console.log('[Store] Cleared knowledge base')
         } catch (error) {
-          console.error('[Store] Failed to clear knowledge base:', error)
+          console.error(`[Store] Failed to clear knowledge base: ${safeErrorMessage(error)}`)
         }
       },
       knowledgeBaseStorageWarning: null,
@@ -711,7 +735,7 @@ export const useStore = create<AppState>()(
       onRehydrateStorage: (state) => {
         return (persistedState: any, error) => {
           if (error) {
-            console.error('An error occurred during hydration', error)
+            console.error(`An error occurred during hydration: ${safeErrorMessage(error)}`)
             return
           }
 
@@ -760,7 +784,7 @@ export const useStore = create<AppState>()(
               // After migration, load from IndexedDB
               state.loadKnowledgeBase()
             }).catch(err => {
-              console.error('[Store] Knowledge base migration failed:', err)
+              console.error(`[Store] Knowledge base migration failed: ${safeErrorMessage(err)}`)
               state.loadKnowledgeBase() // Still try to load
             })
           } else {
