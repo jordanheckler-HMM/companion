@@ -113,7 +113,7 @@ export class ToolService {
         },
         {
             name: 'execute_code',
-            description: 'Execute Python or JavaScript code locally.',
+            description: 'Execute local Python or JavaScript code for computation-only tasks (file/network/process operations are blocked).',
             status: 'active',
             parameters: {
                 type: 'object',

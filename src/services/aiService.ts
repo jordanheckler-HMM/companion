@@ -15,6 +15,11 @@ export interface ChatMessage {
 export interface ChatResponse {
     message: string
     error?: string
+    toolCalls?: { name: string; arguments: any }[]
+}
+
+interface StreamProviderResult {
+    toolCalls?: { name: string; arguments: any }[]
 }
 
 /**
@@ -71,7 +76,8 @@ The editor will open with this content pre-loaded. The user can then edit, save,
             }
 
             // Inject tool definitions and temporal context into system prompt
-            const toolSystemMsg = this.getToolSystemPrompt()
+            const useNativeToolCalling = this.shouldUseNativeToolCalling(model)
+            const toolSystemMsg = this.getToolSystemPrompt(useNativeToolCalling)
             const temporalContext = this.getTemporalContext()
             const injectedContext = [
                 temporalContext,
@@ -109,13 +115,18 @@ The editor will open with this content pre-loaded. The user can then edit, save,
                 if (response.error) return response
 
                 // Check for tool calls in the response
-                const toolCalls = this.extractToolCalls(response.message)
+                const toolCalls =
+                    response.toolCalls && response.toolCalls.length > 0
+                        ? response.toolCalls
+                        : this.extractToolCalls(response.message)
                 if (toolCalls.length === 0) {
                     return response
                 }
 
                 // Execute tools
-                currentMessages.push({ role: 'assistant', content: response.message })
+                if (response.message.trim()) {
+                    currentMessages.push({ role: 'assistant', content: response.message })
+                }
 
                 for (const toolCall of toolCalls) {
                     const result = await ToolService.executeTool(toolCall.name, toolCall.arguments)
@@ -233,6 +244,64 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         }
         // If no header or invalid format, assume it's raw base64 or treat input as is
         return { mimeType: 'image/jpeg', data: dataUrl }
+    }
+
+    private shouldUseNativeToolCalling(model: ModelDefinition): boolean {
+        return model.provider === 'openai' || model.provider === 'anthropic'
+    }
+
+    private extractNativeToolCalls(toolCalls: any[]): { name: string; arguments: any }[] {
+        const parsedCalls: { name: string; arguments: any }[] = []
+        const parseErrors: string[] = []
+
+        for (const call of toolCalls || []) {
+            const name = call?.function?.name || call?.name
+            if (typeof name !== 'string' || !name.trim()) {
+                parseErrors.push('Tool call missing function name')
+                continue
+            }
+
+            const rawArgs = call?.function?.arguments ?? call?.arguments ?? call?.input ?? {}
+            let args: any = {}
+
+            if (rawArgs && typeof rawArgs === 'object') {
+                args = rawArgs
+            } else if (typeof rawArgs === 'string') {
+                const trimmed = rawArgs.trim()
+                if (!trimmed) {
+                    args = {}
+                } else {
+                    try {
+                        args = JSON.parse(trimmed)
+                    } catch (_e) {
+                        try {
+                            args = JSON.parse(this.repairJSON(trimmed))
+                        } catch (_e2) {
+                            parseErrors.push(`Tool "${name}": invalid JSON arguments`)
+                            continue
+                        }
+                    }
+                }
+            } else if (rawArgs == null) {
+                args = {}
+            } else {
+                parseErrors.push(`Tool "${name}": unsupported arguments payload`)
+                continue
+            }
+
+            parsedCalls.push({ name, arguments: args })
+        }
+
+        if (parseErrors.length > 0) {
+            ErrorLogger.log(
+                `Failed to parse ${parseErrors.length} native tool call(s)`,
+                ErrorSeverity.WARNING,
+                'AIService.extractNativeToolCalls',
+                { errors: parseErrors }
+            )
+        }
+
+        return parsedCalls
     }
 
     /**
@@ -446,17 +515,9 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         const message = data.choices?.[0]?.message
 
         if (message.tool_calls) {
-            // Transform native tool calls into our internal format if needed, 
-            // or return/handle them directly. 
-            // For now, we'll serialize them into the text format our loop expects, 
-            // or ideally we handle them natively.
-            // Let's serialize them to our internal text format to keep the loop logic unified for now.
-            const serializedTools = message.tool_calls.map((tc: any) =>
-                `[TOOL:${tc.function.name}]${tc.function.arguments}[/TOOL]`
-            ).join('\n')
-
             return {
-                message: (message.content || '') + '\n' + serializedTools
+                message: message.content || '',
+                toolCalls: this.extractNativeToolCalls(message.tool_calls)
             }
         }
 
@@ -508,12 +569,9 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         const message = data.message
 
         if (message.tool_calls) {
-            const serializedTools = message.tool_calls.map((tc: any) =>
-                `[TOOL:${tc.function.name}]${JSON.stringify(tc.function.arguments)}[/TOOL]`
-            ).join('\n')
-
             return {
-                message: (message.content || '') + '\n' + serializedTools
+                message: message.content || '',
+                toolCalls: this.extractNativeToolCalls(message.tool_calls)
             }
         }
 
@@ -615,19 +673,23 @@ The editor will open with this content pre-loaded. The user can then edit, save,
 
         const data = await response.json()
 
-        // Handle tool use in response
-        if (data.stop_reason === 'tool_use') {
-            const toolBlock = data.content.find((c: any) => c.type === 'tool_use')
-            if (toolBlock) {
-                // Convert to our internal tool format so the chat UI handles it
-                return {
-                    message: `[TOOL:${toolBlock.name}]${JSON.stringify(toolBlock.input)}[/TOOL]`
-                }
-            }
-        }
+        const contentBlocks = Array.isArray(data.content) ? data.content : []
+        const toolCalls = this.extractNativeToolCalls(
+            contentBlocks
+                .filter((c: any) => c.type === 'tool_use')
+                .map((c: any) => ({
+                    name: c.name,
+                    input: c.input
+                }))
+        )
+        const textContent = contentBlocks
+            .filter((c: any) => c.type === 'text' && typeof c.text === 'string')
+            .map((c: any) => c.text)
+            .join('\n')
 
         return {
-            message: data.content?.[0]?.text || '',
+            message: textContent || '',
+            ...(toolCalls.length > 0 ? { toolCalls } : {})
         }
     }
 
@@ -644,9 +706,9 @@ The editor will open with this content pre-loaded. The user can then edit, save,
         }
     }
 
-    private getToolSystemPrompt(): string {
+    private getToolSystemPrompt(useNativeToolCalling: boolean = false): string {
         // Note: We always include tool instructions so the AI knows about available integrations
-        // The text-based tool calling format works with all providers
+        // Native function/tool calling is preferred when available.
 
         const allTools = ToolService.getToolDefinitions()
         const toolSettings = this.settings.toolsEnabled || {
@@ -692,6 +754,22 @@ ${toolStatusSection}
         const connectedSection = connectedIntegrations.length > 0
             ? `\n## CONNECTED INTEGRATIONS (Ready to use - keys are configured):\n${connectedIntegrations.map(i => `✅ ${i}`).join('\n')}\n`
             : ''
+
+        if (useNativeToolCalling) {
+            return `
+YOU ARE A TOOL-USING ASSISTANT. When you need external information, call a tool using the model/provider's native tool-calling interface.
+${toolStatusSection}
+${connectedSection}
+## AVAILABLE TOOLS:
+${toolList}
+
+## RULES:
+- Use native tool/function calls only. Do not emit [TOOL:...] tags or XML wrappers.
+- Do NOT ask for usernames, API keys, or clarification when a tool can provide the data.
+- GitHub "repos" operation returns the authenticated user's repos by default.
+- After receiving tool results, provide your answer based on that data.
+`
+        }
 
         return `
 YOU ARE A TOOL-USING ASSISTANT. When you need external information, you MUST output a tool call.
@@ -766,7 +844,8 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
 
         // Inject tool definitions and temporal context into system prompt
         try {
-            const toolSystemMsg = this.getToolSystemPrompt()
+            const useNativeToolCalling = this.shouldUseNativeToolCalling(model)
+            const toolSystemMsg = this.getToolSystemPrompt(useNativeToolCalling)
             const temporalContext = this.getTemporalContext()
             const injectedContext = [
                 temporalContext,
@@ -788,23 +867,39 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
 
             while (iterationCount < maxIterations) {
                 let fullResponse = ''
+                let streamResult: StreamProviderResult = {}
                 const streamChunk = (chunk: string) => {
                     fullResponse += chunk
                     onChunk(chunk)
                 }
 
                 if (model.provider === 'ollama') {
-                    await this.retryOperation(() => this.streamFromOllama(currentMessages, model, streamChunk, signal), 'StreamOllama')
+                    streamResult = await this.retryOperation(
+                        () => this.streamFromOllama(currentMessages, model, streamChunk, signal),
+                        'StreamOllama'
+                    )
                 } else if (model.provider === 'openai') {
-                    await this.retryOperation(() => this.streamFromOpenAI(currentMessages, model, streamChunk), 'StreamOpenAI')
+                    streamResult = await this.retryOperation(
+                        () => this.streamFromOpenAI(currentMessages, model, streamChunk),
+                        'StreamOpenAI'
+                    )
                 } else if (model.provider === 'google') {
                     // Added retry support for Google streaming
-                    await this.retryOperation(() => this.streamFromGoogle(currentMessages, model, streamChunk), 'StreamGoogle')
+                    streamResult = await this.retryOperation(
+                        () => this.streamFromGoogle(currentMessages, model, streamChunk),
+                        'StreamGoogle'
+                    )
                 } else {
-                    await this.retryOperation(() => this.streamFromAnthropic(currentMessages, model, streamChunk), 'StreamAnthropic')
+                    streamResult = await this.retryOperation(
+                        () => this.streamFromAnthropic(currentMessages, model, streamChunk),
+                        'StreamAnthropic'
+                    )
                 }
 
-                const toolCalls = this.extractToolCalls(fullResponse)
+                const toolCalls =
+                    streamResult.toolCalls && streamResult.toolCalls.length > 0
+                        ? streamResult.toolCalls
+                        : this.extractToolCalls(fullResponse)
 
                 // Exit loop if no tool calls found - this is the normal case
                 if (toolCalls.length === 0) {
@@ -812,7 +907,9 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                 }
 
                 // Only continue looping if we actually executed tools
-                currentMessages.push({ role: 'assistant', content: fullResponse })
+                if (fullResponse.trim()) {
+                    currentMessages.push({ role: 'assistant', content: fullResponse })
+                }
 
                 let toolsExecuted = 0
                 for (const toolCall of toolCalls) {
@@ -934,7 +1031,12 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
     /**
      * Stream from Ollama
      */
-    private async streamFromOllama(messages: ChatMessage[], model: ModelDefinition, onChunk: (chunk: string) => void, signal?: AbortSignal) {
+    private async streamFromOllama(
+        messages: ChatMessage[],
+        model: ModelDefinition,
+        onChunk: (chunk: string) => void,
+        signal?: AbortSignal
+    ): Promise<StreamProviderResult> {
         // Pre-process messages to handle resizing and local model constraints
         // Filter out system messages for vision models FIRST
         const filteredMessages = messages.filter(m => !(model.capabilities.vision && m.role === 'system'))
@@ -1028,6 +1130,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                     }
                 }
             }
+            return {}
         } finally {
             clearTimeout(timeoutId)
         }
@@ -1036,9 +1139,14 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
     /**
      * Stream from OpenAI
      */
-    private async streamFromOpenAI(messages: ChatMessage[], model: ModelDefinition, onChunk: (chunk: string) => void) {
+    private async streamFromOpenAI(
+        messages: ChatMessage[],
+        model: ModelDefinition,
+        onChunk: (chunk: string) => void
+    ): Promise<StreamProviderResult> {
         const apiKey = this.getApiKey('openai')
         if (!apiKey) throw new Error('Missing OpenAI API Key. Please add it in Settings.')
+        const tools = this.getOpenAITools()
 
         // Transform messages for OpenAI Vision
         const formattedMessages = messages.map(m => {
@@ -1063,17 +1171,23 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
             return { role: m.role, content: m.content }
         })
 
+        const body: any = {
+            model: model.id,
+            messages: formattedMessages,
+            stream: true,
+        }
+        if (tools.length > 0) {
+            body.tools = tools
+            body.tool_choice = 'auto'
+        }
+
         const response = await tauriFetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
             },
-            body: JSON.stringify({
-                model: model.id,
-                messages: formattedMessages,
-                stream: true,
-            }),
+            body: JSON.stringify(body),
         })
 
         if (!response.ok) {
@@ -1086,6 +1200,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let buffer = ''
+        const partialToolCalls = new Map<number, { name: string; arguments: string }>()
 
         while (true) {
             const { done, value } = await reader.read()
@@ -1115,17 +1230,47 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                         // We wrap it in tags to ensure our UI catches it
                         onChunk(`<think>${delta.reasoning_content}</think>`)
                     }
+
+                    // Handle native streaming tool calls
+                    const toolDeltas = delta?.tool_calls
+                    if (Array.isArray(toolDeltas)) {
+                        for (const toolDelta of toolDeltas) {
+                            const index = typeof toolDelta?.index === 'number' ? toolDelta.index : 0
+                            const existing = partialToolCalls.get(index) || { name: '', arguments: '' }
+                            if (typeof toolDelta?.function?.name === 'string') {
+                                existing.name = toolDelta.function.name
+                            }
+                            if (typeof toolDelta?.function?.arguments === 'string') {
+                                existing.arguments += toolDelta.function.arguments
+                            }
+                            partialToolCalls.set(index, existing)
+                        }
+                    }
                 } catch (e) {
                     console.error('Error parsing OpenAI stream chunk:', e)
                 }
             }
         }
+
+        const toolCalls = this.extractNativeToolCalls(
+            Array.from(partialToolCalls.values()).map(tc => ({
+                function: {
+                    name: tc.name,
+                    arguments: tc.arguments
+                }
+            }))
+        )
+        return toolCalls.length > 0 ? { toolCalls } : {}
     }
 
     /**
      * Stream from Anthropic
      */
-    private async streamFromAnthropic(messages: ChatMessage[], model: ModelDefinition, onChunk: (chunk: string) => void) {
+    private async streamFromAnthropic(
+        messages: ChatMessage[],
+        model: ModelDefinition,
+        onChunk: (chunk: string) => void
+    ): Promise<StreamProviderResult> {
         const systemMessage = messages.find((m) => m.role === 'system')
         const conversationMessages = messages.filter((m) => m.role !== 'system')
 
@@ -1152,10 +1297,8 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let buffer = ''
-
-        // Track current tool use
-        let currentToolName = ''
-        let currentToolInput = ''
+        const openToolBlocks = new Map<number, { name: string; input: string }>()
+        const completedToolBlocks: Array<{ name: string; input: string }> = []
 
         while (true) {
             const { done, value } = await reader.read()
@@ -1173,6 +1316,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
 
                 try {
                     const data = JSON.parse(trimmed)
+                    const blockIndex = typeof data.index === 'number' ? data.index : 0
 
                     // Handle text content
                     if (data.type === 'content_block_delta' && data.delta?.text) {
@@ -1181,25 +1325,28 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
 
                     // Handle tool use start
                     if (data.type === 'content_block_start' && data.content_block?.type === 'tool_use') {
-                        currentToolName = data.content_block.name
-                        currentToolInput = ''
+                        openToolBlocks.set(blockIndex, {
+                            name: data.content_block.name || '',
+                            input: ''
+                        })
                     }
 
                     // Handle tool input delta
                     if (data.type === 'content_block_delta' && data.delta?.type === 'input_json_delta') {
-                        currentToolInput += data.delta.partial_json
+                        const existing = openToolBlocks.get(blockIndex)
+                        if (existing) {
+                            existing.input += data.delta.partial_json || ''
+                            openToolBlocks.set(blockIndex, existing)
+                        }
                     }
 
                     // Handle content block stop (tool use finished)
-                    if (data.type === 'content_block_stop' && currentToolName) {
-                        // Normalize to internal format for execution
-                        // [TOOL:name]{"param": "value"}[/TOOL]
-                        const normalizedToolCall = `[TOOL:${currentToolName}]${currentToolInput}[/TOOL]`
-                        onChunk(normalizedToolCall)
-
-                        // Reset
-                        currentToolName = ''
-                        currentToolInput = ''
+                    if (data.type === 'content_block_stop') {
+                        const completed = openToolBlocks.get(blockIndex)
+                        if (completed && completed.name) {
+                            completedToolBlocks.push(completed)
+                            openToolBlocks.delete(blockIndex)
+                        }
                     }
 
                 } catch (e) {
@@ -1207,6 +1354,18 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                 }
             }
         }
+
+        for (const pending of openToolBlocks.values()) {
+            if (pending.name) completedToolBlocks.push(pending)
+        }
+
+        const toolCalls = this.extractNativeToolCalls(
+            completedToolBlocks.map(tb => ({
+                name: tb.name,
+                input: tb.input
+            }))
+        )
+        return toolCalls.length > 0 ? { toolCalls } : {}
     }
 
     /**
@@ -1364,7 +1523,11 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
     /**
      * Stream from Google Gemini
      */
-    private async streamFromGoogle(messages: ChatMessage[], model: ModelDefinition, onChunk: (chunk: string) => void) {
+    private async streamFromGoogle(
+        messages: ChatMessage[],
+        model: ModelDefinition,
+        onChunk: (chunk: string) => void
+    ): Promise<StreamProviderResult> {
         const apiKey = this.getApiKey('google')
         const contents = messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role === 'assistant' ? 'model' : 'user',
@@ -1400,7 +1563,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
         }
 
         const reader = response.body?.getReader()
-        if (!reader) return
+        if (!reader) return {}
 
         const decoder = new TextDecoder()
         let buffer = ''
@@ -1425,5 +1588,7 @@ You output: [TOOL:web_search]{"query": "weather in Tokyo"}[/TOOL]
                 }
             }
         }
+
+        return {}
     }
 }
