@@ -1,7 +1,7 @@
 import { Command } from '@tauri-apps/plugin-shell'
 import { writeTextFile, remove } from '@tauri-apps/plugin-fs'
 import { confirm } from '@tauri-apps/plugin-dialog'
-import { tempDir } from '@tauri-apps/api/path'
+import { join, normalize, sep, tempDir } from '@tauri-apps/api/path'
 
 export class CodeExecutionTool {
     private static readonly MAX_CODE_LENGTH = 12000
@@ -36,8 +36,22 @@ export class CodeExecutionTool {
             .map(({ label }) => label)
     }
 
+    private static async ensurePathWithinDirectory(baseDirectory: string, targetPath: string): Promise<void> {
+        const normalizedBaseDirectory = await normalize(baseDirectory)
+        const normalizedTargetPath = await normalize(targetPath)
+        const separator = sep()
+        const basePrefix = normalizedBaseDirectory.endsWith(separator)
+            ? normalizedBaseDirectory
+            : `${normalizedBaseDirectory}${separator}`
+
+        if (normalizedTargetPath !== normalizedBaseDirectory && !normalizedTargetPath.startsWith(basePrefix)) {
+            throw new Error('Refusing to access path outside of the temp directory.')
+        }
+    }
+
     static async execute(language: 'python' | 'javascript', code: string): Promise<string> {
         let filePath = ''
+        let tempPath = ''
         try {
             const normalizedLanguage = this.normalizeLanguage(language)
             if (!normalizedLanguage) {
@@ -64,9 +78,10 @@ export class CodeExecutionTool {
             )
             if (!confirmed) return "User denied code execution permission."
 
-            const tempPath = await tempDir()
+            tempPath = await tempDir()
             const fileName = `companion_task_${Date.now()}.${normalizedLanguage === 'python' ? 'py' : 'js'}`
-            filePath = `${tempPath.replace(/\/$/, '')}/${fileName}`
+            filePath = await join(tempPath, fileName)
+            await this.ensurePathWithinDirectory(tempPath, filePath)
 
             await writeTextFile(filePath, code)
 
@@ -90,8 +105,9 @@ export class CodeExecutionTool {
         } catch (error) {
             return `Error: ${error instanceof Error ? error.message : String(error)}`
         } finally {
-            if (filePath) {
+            if (filePath && tempPath) {
                 try {
+                    await this.ensurePathWithinDirectory(tempPath, filePath)
                     await remove(filePath)
                 } catch (_error) {
                     // Ignore cleanup errors
