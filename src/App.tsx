@@ -22,6 +22,7 @@ import mammoth from 'mammoth'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ToastManager } from '@/components/ToastManager'
 import { automationService } from '@/services/AutomationService'
+import { ecosystemService } from '@/services/EcosystemService'
 
 // Initialize PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker
@@ -141,6 +142,19 @@ function App() {
     const initializeModels = async () => {
       console.log('[App] Initializing models...')
       const registry = ModelRegistry.getInstance()
+
+      // Initialize ecosystem directory structure (~/.hymetalab/)
+      try {
+        const ecosystemInitialized = await ecosystemService.initialize()
+        if (ecosystemInitialized) {
+          console.log('[App] Ecosystem initialized successfully')
+
+          // Sync models from ecosystem registry.json
+          await registry.syncEcosystemRegistry()
+        }
+      } catch (e) {
+        console.warn('[App] Ecosystem initialization failed, continuing with defaults:', e)
+      }
 
       // Always try to sync via HTTP first - this works even if CLI check fails
       await registry.syncOllamaModels(settings.aiSettings.ollamaUrl)

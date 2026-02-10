@@ -1,4 +1,5 @@
 // Use native fetch for Ollama (localhost) - Tauri HTTP plugin has issues with loopback
+import { ecosystemService, ModelEntry } from './EcosystemService'
 
 export interface ModelDefinition {
     id: string
@@ -21,6 +22,7 @@ export interface ModelDefinition {
 export class ModelRegistry {
     private static instance: ModelRegistry
     private models: ModelDefinition[] = []
+    private ecosystemRegistryLoaded = false
 
     public static readonly CORE_CHAT_MODEL = 'hymetalab/lumora-lite'
     public static readonly CORE_EMBED_MODEL = 'nomic-embed-text'
@@ -227,5 +229,91 @@ export class ModelRegistry {
 
     public addTemporaryModel(model: ModelDefinition) {
         this.models.push(model)
+    }
+
+    /**
+     * Sync models from the shared ecosystem registry (~/.hymetalab/models/registry.json)
+     * Falls back to current behavior if registry doesn't exist
+     */
+    public async syncEcosystemRegistry(): Promise<boolean> {
+        console.log('[ModelRegistry] Syncing from ecosystem registry...')
+
+        try {
+            // Check if registry exists
+            const registryExists = await ecosystemService.registryExists()
+
+            if (!registryExists) {
+                console.log('[ModelRegistry] Ecosystem registry not found, using defaults')
+                return false
+            }
+
+            const registry = await ecosystemService.getModelRegistry()
+
+            if (!registry || !registry.models || registry.models.length === 0) {
+                console.log('[ModelRegistry] Ecosystem registry empty or invalid')
+                return false
+            }
+
+            console.log(`[ModelRegistry] Found ${registry.models.length} models in ecosystem registry`)
+
+            // Convert ecosystem model entries to ModelDefinition format
+            const ecosystemModels: ModelDefinition[] = registry.models.map(this.convertEcosystemModel)
+
+            // Merge ecosystem models with static cloud models
+            // Ecosystem registry takes priority for local models
+            const cloudModels = this.models.filter(m => m.type === 'cloud')
+            const ecosystemLocalModels = ecosystemModels.filter(m => m.type === 'local')
+            const ecosystemCloudModels = ecosystemModels.filter(m => m.type === 'cloud')
+
+            // Merge: ecosystem cloud models override static cloud if same id
+            const mergedCloudModels = cloudModels.map(staticModel => {
+                const override = ecosystemCloudModels.find(e => e.id === staticModel.id)
+                return override || staticModel
+            })
+
+            // Add any ecosystem cloud models not in static list
+            const newCloudModels = ecosystemCloudModels.filter(
+                e => !cloudModels.some(s => s.id === e.id)
+            )
+
+            this.models = [
+                ...mergedCloudModels,
+                ...newCloudModels,
+                ...ecosystemLocalModels
+            ]
+
+            this.ecosystemRegistryLoaded = true
+            console.log('[ModelRegistry] Ecosystem registry synced successfully')
+            return true
+        } catch (e) {
+            console.error('[ModelRegistry] Failed to sync ecosystem registry:', e)
+            return false
+        }
+    }
+
+    /**
+     * Convert an ecosystem ModelEntry to a ModelDefinition
+     */
+    private convertEcosystemModel(entry: ModelEntry): ModelDefinition {
+        return {
+            id: entry.id,
+            displayName: entry.displayName,
+            provider: entry.provider,
+            type: entry.type,
+            capabilities: {
+                tools: entry.capabilities.tools,
+                vision: entry.capabilities.vision,
+                streaming: entry.capabilities.streaming,
+                maxTokens: entry.capabilities.maxTokens
+            },
+            status: entry.status || 'available'
+        }
+    }
+
+    /**
+     * Check if ecosystem registry was loaded
+     */
+    public isEcosystemRegistryLoaded(): boolean {
+        return this.ecosystemRegistryLoaded
     }
 }
